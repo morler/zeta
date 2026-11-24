@@ -166,3 +166,45 @@ fn main() -> i64 {
     );
     assert_eq!(result, 6);
 }
+
+/// `as` casts produce real narrow integers, but the array runtime takes `i64`.
+/// The call site must widen them back, otherwise LLVM rejects the call with
+/// "Call parameter type does not match function signature" (issue #18).
+#[test]
+fn push_of_cast_value_compiles_and_stores() {
+    let result = run_zeta_main(
+        r#"
+fn main() -> i64 {
+    let arr: [dynamic]u8 = [dynamic]u8{}
+    let mut i: i64 = 0
+    while i < 5 {
+        arr.push(i as u8)
+        i += 1
+    }
+    // arr holds 0,1,2,3,4 (0 + 1 + 2 + 3 + 4 = 10) and len() is 5.
+    return arr.len() * 100 + arr[4]
+}
+"#,
+    );
+    assert_eq!(result, 504);
+}
+
+/// The same widening must apply to ordinary function calls, for several
+/// narrow target widths.
+#[test]
+fn cast_argument_to_plain_function_is_widened() {
+    let result = run_zeta_main(
+        r#"
+fn bump(x: i64) -> i64 {
+    return x + 1
+}
+
+fn main() -> i64 {
+    let a: i64 = 300
+    // 300 as u8 truncates to 44, so bump gives 45.
+    return bump(a as u8) * 100 + bump(a as i32) - 300
+}
+"#,
+    );
+    assert_eq!(result, 4501);
+}

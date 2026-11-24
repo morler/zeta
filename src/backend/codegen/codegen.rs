@@ -17,7 +17,7 @@ use inkwell::IntPredicate;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
-use inkwell::types::{IntType, PointerType, VectorType};
+use inkwell::types::{BasicMetadataTypeEnum, IntType, PointerType, VectorType};
 use inkwell::values::{
     BasicMetadataValueEnum, BasicValueEnum, CallSiteValue, FunctionValue, PointerValue,
 };
@@ -2796,7 +2796,11 @@ impl<'ctx> LLVMCodegen<'ctx> {
                         let callee = self.get_or_declare_function(func, type_args, args.len());
                         let arg_vals: Vec<BasicMetadataValueEnum> = args
                             .iter()
-                            .map(|&id| self.gen_expr_safe(&id, exprs).into())
+                            .enumerate()
+                            .map(|(i, &id)| {
+                                let val = self.gen_expr_safe(&id, exprs);
+                                self.coerce_arg_to_param(val, callee, i).into()
+                            })
                             .collect();
                         let call = self.builder.build_call(callee, &arg_vals, "").unwrap();
                         if let Some(val) = Self::call_site_to_basic_value(call) {
@@ -3303,7 +3307,7 @@ impl<'ctx> LLVMCodegen<'ctx> {
                                     .unwrap();
                                 ptr_val.into()
                             } else {
-                                val.into()
+                                self.coerce_arg_to_param(val, callee, i).into()
                             }
                         })
                         .collect();
@@ -4882,6 +4886,50 @@ impl<'ctx> LLVMCodegen<'ctx> {
     fn load_local(&self, id: u32) -> BasicValueEnum<'ctx> {
         let ptr = *self.locals.get(&id).unwrap();
         self.builder.build_load(self.i64_type, ptr, "").unwrap()
+    }
+
+    /// Coerce a call argument to the callee's declared parameter type.
+    ///
+    /// `as` casts are code-generated as real narrow integers (`i8`, `i16`, ...),
+    /// but the runtime ABI (e.g. `array_push(i64, i64)`) and most declared
+    /// functions take `i64`. Passing the narrow value straight through makes
+    /// LLVM reject the call with "Call parameter type does not match function
+    /// signature" (see issue #18). Extend/widen here so the call verifies.
+    fn coerce_arg_to_param(
+        &self,
+        val: BasicValueEnum<'ctx>,
+        callee: FunctionValue<'ctx>,
+        index: usize,
+    ) -> BasicValueEnum<'ctx> {
+        let Some(param_type) = callee.get_type().get_param_types().get(index).copied() else {
+            return val;
+        };
+        let BasicValueEnum::IntValue(int_val) = val else {
+            return val;
+        };
+        let BasicMetadataTypeEnum::IntType(param_int_type) = param_type else {
+            // Pointer / float / vector parameters keep their value as-is.
+            return val;
+        };
+        let param_width = param_int_type.get_bit_width();
+        let val_width = int_val.get_type().get_bit_width();
+        if param_width == val_width {
+            return val;
+        }
+        let target = param_int_type;
+        if param_width > val_width {
+            // Widen. `As` already truncated, so the high bits are gone; use a
+            // zero-extend, which matches the behaviour the cast asked for.
+            self.builder
+                .build_int_z_extend(int_val, target, "arg_ext")
+                .unwrap()
+                .into()
+        } else {
+            self.builder
+                .build_int_truncate(int_val, target, "arg_trunc")
+                .unwrap()
+                .into()
+        }
     }
 
     fn call_site_to_basic_value(call: CallSiteValue<'ctx>) -> Option<BasicValueEnum<'ctx>> {
