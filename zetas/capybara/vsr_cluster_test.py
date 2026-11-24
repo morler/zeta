@@ -15,7 +15,13 @@ Field offsets (Zeta session mode, data_off=16):
 
 Usage: python3 vsr_cluster_test.py
 """
-import socket, struct, subprocess, time, os, sys, signal
+import os
+import signal
+import socket
+import struct
+import subprocess
+import sys
+import time
 
 CAPYBARA = "/tmp/capybara"
 DIRS = ["/tmp/capybara_data", "/tmp/capybara1", "/tmp/capybara2"]
@@ -72,7 +78,7 @@ def recv_all(s, size, timeout=8.0):
             if not chunk:
                 raise ConnectionError("Connection closed")
             buf += chunk
-        except socket.timeout:
+        except TimeoutError:
             raise TimeoutError(f"recv timeout after {len(buf)}/{size} bytes")
     return buf
 
@@ -146,11 +152,11 @@ def test_basic_operations():
     assert bal == 50000, f"balance(100): {bal} != 50000"
 
     r = cmd(0, OP_CREATE, 200, 0, 1, 1)
-    assert r == OP_CREATE, f"create(200) failed"
+    assert r == OP_CREATE, "create(200) failed"
     r = cmd(0, OP_CREDIT, 200, 0, 10000)
-    assert r == OP_CREDIT, f"credit(200) failed"
+    assert r == OP_CREDIT, "credit(200) failed"
     r = cmd(0, OP_CREATE, 201, 0, 1, 1)
-    assert r == OP_CREATE, f"create(201) failed"
+    assert r == OP_CREATE, "create(201) failed"
     r = cmd(0, OP_TRANSFER, 200, 0, 201, 0, 3000)
     assert r == OP_TRANSFER, f"transfer failed: rc={r}"
 
@@ -239,8 +245,7 @@ def test_status_flag():
     """Test --status flag correctly reports server state."""
     print("\n=== Test 5: --status flag ===")
     # Start fresh replica for status test
-    rid = 0
-    d = f"/tmp/capybara_status"
+    d = "/tmp/capybara_status"
     subprocess.run(["rm", "-rf", d], capture_output=True)
     os.makedirs(f"{d}/lsm", exist_ok=True)
 
@@ -277,7 +282,7 @@ def test_status_flag():
         capture_output=True, text=True, timeout=5
     )
     out = result.stdout + result.stderr
-    print(f"  --status output: {repr(out[:200])}")
+    print(f"  --status output: {out[:200]!r}")
     print("  PASS")
     return True
 
@@ -287,7 +292,7 @@ def test_status_flag():
 try:
     clean()
     print("=== Capybara DB VSR Cluster Test ===")
-    print(f"Starting 3-node cluster...")
+    print("Starting 3-node cluster...")
 
     procs = [start_replica(i) for i in range(3)]
     print(f"  PIDs: {[p.pid for p in procs]}")
@@ -337,11 +342,9 @@ finally:
             try:
                 p.terminate()
                 p.wait(timeout=3)
-            except:
+            except (ProcessLookupError, PermissionError, subprocess.TimeoutExpired):
+                # Already gone, or refused to exit gracefully: force it.
                 p.kill()
-        except Exception:
-            try:
-                p.kill()
-            except:
-                pass
+        except OSError as exc:
+            print(f"  cleanup: could not signal pid {p.pid}: {exc}")
     print("Cleanup complete")
