@@ -1,7 +1,7 @@
 ---
 id: 8
 title: '工作流缺少显式 permissions 与 persist-credentials: false'
-status: open
+status: in-progress
 priority: medium
 labels:
     - security
@@ -46,3 +46,45 @@ updated: "2026-11-24"
      contents: read
    ```
 2. 所有 `actions/checkout` 加 `with: persist-credentials: false`（需要写操作的 job 除外，且写操作改用显式 token）
+
+---
+
+## 修复记录（已完成）
+
+### 改动原则
+
+按 issue 中已核实的分档处理：写操作 job 显式收窄权限，只读 job 设为 `contents: read`；
+所有 `actions/checkout` 关闭凭据持久化（确需 push 的除外）。
+
+### permissions（顶层只读，写权限下移到具体 job）
+
+| 工作流 | 权限 |
+|---|---|
+| ci.yml | `contents: read` |
+| benchmarks.yml | `contents: read` |
+| release.yml | `contents: write`（发布 GitHub Release 所必需） |
+| agent-dashboard.yml | `contents: read`、`actions: read`（列 workflow/run）、`issues: write`（commit comment 走 issues API） |
+| agent-branches.yml | 顶层 `contents: read`；`pr-comment` job 追加 `pull-requests: write`、`issues: write` |
+| agent-sync.yml | 顶层 `contents: read`；`sync-and-merge` job `issues: write`；`merge-to-main` job `contents: write` |
+
+初版把写权限放在工作流顶层，zizmor 仍报 `excessive-permissions`（"overly broad at the
+workflow level"），因此改为 job 级，符合最小权限。
+
+### persist-credentials: false
+
+13 处 `actions/checkout` 全部设置 `persist-credentials: false`，唯一例外是
+`agent-sync.yml` 的 `merge-to-main` job —— 它要 `git push origin v0.3.9`，
+保留 `persist-credentials: true` 并加注释说明原因。
+
+### 验证
+
+| 检查 | 结果 |
+|---|---|
+| `zizmor/artipacked` | 14 -> **0** ✅ |
+| `zizmor/excessive-permissions` | 19 -> **0** ✅ |
+| `actionlint` 全部工作流 | exit 0 |
+| 各工作流权限结构 | 逐项核对需求（见上表） |
+
+### 未处理
+
+`unpinned-uses`（31 条）属于 #7，本次未动。

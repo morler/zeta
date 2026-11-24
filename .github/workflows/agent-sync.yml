@@ -11,16 +11,23 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   sync-and-merge:
     name: Sync ${{ github.ref_name }} → v0.3.9
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write   # open the merge-conflict issue
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Get all history for merging
+          persist-credentials: false
           
       - name: Configure Git
         run: |
@@ -180,12 +187,15 @@ jobs:
     if: github.event_name == 'workflow_dispatch'  # Manual trigger only
     needs: sync-and-merge
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # push the merge result to v0.3.9
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true  # needed to push the merge
           
       - name: Merge feature branch to v0.3.9
         env:

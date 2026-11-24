@@ -4,6 +4,9 @@
 
 name: Benchmarks
 
+permissions:
+  contents: read
+
 on:
   # Run on push to main/dev branches (but less frequently than CI)
   push:
@@ -52,6 +55,8 @@ jobs:
       llvm_prefix: ${{ steps.set-llvm.outputs.llvm_prefix }}
     steps:
     - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
     - name: Install LLVM 21
       run: |
         wget https://apt.llvm.org/llvm.sh
@@ -86,6 +91,8 @@ jobs:
     if: ${{ github.event_name == 'schedule' || github.event.inputs.benchmark_type == 'all' || github.event.inputs.benchmark_type == 'compiler' }}
     steps:
     - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
     - name: Setup LLVM
       env:
         LLVM_PREFIX: ${{ needs.setup.outputs.llvm_prefix }}
@@ -130,6 +137,8 @@ jobs:
     if: ${{ github.event_name == 'schedule' || github.event.inputs.benchmark_type == 'all' || github.event.inputs.benchmark_type == 'runtime' }}
     steps:
     - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
     - name: Setup LLVM
       env:
         LLVM_PREFIX: ${{ needs.setup.outputs.llvm_prefix }}
@@ -174,6 +183,8 @@ jobs:
     if: ${{ github.event_name == 'schedule' || github.event.inputs.benchmark_type == 'all' || github.event.inputs.benchmark_type == 'regression' }}
     steps:
     - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
     - name: Setup LLVM
       env:
         LLVM_PREFIX: ${{ needs.setup.outputs.llvm_prefix }}
@@ -226,6 +237,8 @@ jobs:
     if: always()
     steps:
     - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
     - name: Generate benchmark report
       run: |
         echo "📊 ZETA BENCHMARK REPORT"

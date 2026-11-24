@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ main, dev ]
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-Dwarnings"
@@ -17,6 +20,8 @@ jobs:
     runs-on: [self-hosted, galaxy, wsl2, x86-64]
     steps:
     - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
     - name: Check
       run: cargo check --workspace --all-targets
     - name: Clippy
@@ -29,6 +34,8 @@ jobs:
     needs: check
     steps:
     - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
     - name: Test
       run: cargo test --workspace
     - name: Build release
@@ -39,6 +46,8 @@ jobs:
     needs: test
     steps:
     - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
     - name: Build release compiler
       run: |
         cargo build --release
@@ -72,6 +81,8 @@ jobs:
     needs: test
     steps:
     - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
     - name: Build release
       run: cargo build --release
     - name: Run benchmarks
