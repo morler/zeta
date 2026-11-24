@@ -1,12 +1,13 @@
 ---
 id: 14
 title: 'Solana/BSV 模块大量桩实现（TODO: Implement actual ...）'
-status: in-progress
+status: closed
 priority: medium
 labels:
     - feature
 created: "2026-11-24"
 updated: "2026-11-24"
+closed: "2026-11-24"
 ---
 
 ## 证据
