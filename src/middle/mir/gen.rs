@@ -1918,6 +1918,34 @@ impl MirGen {
                 let mir_type_args: Vec<Type> =
                     type_args.iter().map(|t| Type::from_string(t)).collect();
 
+                if is_array_push {
+                    // `array_push` returns the data pointer to keep using: a
+                    // push may reallocate the backing block and move it. Write
+                    // the new pointer back into the receiver's variable so
+                    // later `arr[i]` / `arr.len()` see the live allocation.
+                    let new_ptr = self.next_id();
+                    self.stmts.push(MirStmt::Call {
+                        func: func,
+                        args: arg_ids,
+                        dest: new_ptr,
+                        type_args: vec![],
+                    });
+                    self.exprs.insert(new_ptr, MirExpr::Var(new_ptr));
+                    if let Some(receiver_ast) = receiver
+                        && let AstNode::Var(name) = &**receiver_ast
+                        && let Some(&var_id) = self.name_to_id.get(name)
+                    {
+                        self.stmts.push(MirStmt::Assign {
+                            lhs: var_id,
+                            rhs: new_ptr,
+                        });
+                    }
+                    // `push` still evaluates to unit.
+                    self.exprs.insert(id, MirExpr::Lit(0));
+                    self.type_map.insert(id, Type::Tuple(vec![]));
+                    return id;
+                }
+
                 // Append arg count to disambiguate overloaded functions.
                 // gen_mirs creates name_N for overloaded declarations;
                 // this ensures call sites match the right declaration.
@@ -1932,9 +1960,6 @@ impl MirGen {
                 // For array methods, set appropriate return type
                 if is_array_len {
                     self.type_map.insert(id, Type::I64);
-                } else if is_array_push {
-                    // push returns void
-                    self.type_map.insert(id, Type::Tuple(vec![]));
                 } else {
                     self.type_map.insert(id, Type::I64);
                 }
@@ -2759,14 +2784,18 @@ impl MirGen {
                 let array_type = Type::DynamicArray(Box::new(Type::from_string(elem_type)));
                 self.type_map.insert(array_ptr, array_type.clone());
 
-                // Push each element to the array
+                // Push each element to the array. `array_push` returns the
+                // data pointer to keep using, because a growing push may
+                // relocate the backing block.
                 for element in elements {
                     let elem_id = self.lower_expr(element);
-                    let void_dest = self.next_id(); // push returns void
+                    // A growing push may relocate the block. The call writes
+                    // the new pointer into the array's own slot, so every later
+                    // access reads the live allocation.
                     self.stmts.push(MirStmt::Call {
                         func: "array_push".to_string(),
                         args: vec![array_ptr, elem_id],
-                        dest: void_dest,
+                        dest: array_ptr,
                         type_args: vec![],
                     });
                 }

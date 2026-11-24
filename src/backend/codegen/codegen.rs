@@ -397,9 +397,10 @@ impl<'ctx> LLVMCodegen<'ctx> {
             Some(Linkage::External),
         );
         // Array functions
+        // Signature must match the Rust runtime: array_new(capacity: usize) -> i64
         module.add_function(
             "array_new",
-            i64_type.fn_type(&[i64_type.into(), i64_type.into()], false),
+            i64_type.fn_type(&[i64_type.into()], false),
             Some(Linkage::External),
         );
         module.add_function(
@@ -432,6 +433,8 @@ impl<'ctx> LLVMCodegen<'ctx> {
             void_type.fn_type(&[i64_type.into(), i64_type.into(), i64_type.into()], false),
             Some(Linkage::External),
         );
+        // array_push returns the (possibly relocated) data pointer so the
+        // caller can store it back after a growing push.
         module.add_function(
             "array_push",
             i64_type.fn_type(&[i64_type.into(), i64_type.into()], false),
@@ -658,32 +661,9 @@ impl<'ctx> LLVMCodegen<'ctx> {
         }
 
         // Array runtime functions
-        // Note: array_new already declared above (line 312)
-        // module.add_function(
-        //     "array_new",
-        //     i64_type.fn_type(&[i64_type.into()], false),
-        //     Some(Linkage::External),
-        // );
-        module.add_function(
-            "array_push",
-            void_type.fn_type(&[i64_type.into(), i64_type.into()], false),
-            Some(Linkage::External),
-        );
-        module.add_function(
-            "array_len",
-            i64_type.fn_type(&[i64_type.into()], false),
-            Some(Linkage::External),
-        );
-        let array_get_fn2 = module.add_function(
-            "array_get",
-            i64_type.fn_type(&[i64_type.into(), i64_type.into()], false),
-            Some(Linkage::External),
-        );
-        #[cfg(target_os = "windows")]
-        {
-            // Note: Calling convention setting disabled - can't find correct API in inkwell 0.8.0
-            // array_get_fn2.set_call_conventions(...);
-        }
+        // `array_new`, `array_len`, `array_get` and `array_push` are declared in
+        // the block above together with the rest of the array runtime; only the
+        // remaining entry points are declared here.
         module.add_function(
             "stack_array_get",
             i64_type.fn_type(&[i64_type.into(), i64_type.into()], false),

@@ -203,5 +203,10 @@ path = "tests/unit/quantum_module_test.rs"
 name = "teranode_integration"
 path = "tests/integration/teranode_integration.rs"
 
+# Dynamic array runtime end-to-end tests (parse -> MIR -> LLVM -> JIT)
+[[test]]
+name = "dynamic_array_runtime"
+path = "tests/array-parsing/dynamic_array_runtime.rs"
+
 # Benchmark configurations.
 

@@ -1446,7 +1446,7 @@ impl Resolver {
             ),
         );
 
-        // array_push(arr: i64, value: i64) -> void
+        // array_push(arr: i64, value: i64) -> i64 (the data pointer to keep)
         self.funcs.insert(
             "array_push".to_string(),
             (
@@ -1454,8 +1454,8 @@ impl Resolver {
                     ("arr".to_string(), Type::I64),
                     ("value".to_string(), Type::I64),
                 ],
-                Type::Tuple(vec![]), // void
-                false,               // not async
+                Type::I64,
+                false, // not async
             ),
         );
 

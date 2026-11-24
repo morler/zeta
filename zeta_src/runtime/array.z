@@ -41,6 +41,13 @@ impl<T> DynamicArray<T> {
         self.length += 1;
     }
     
+    /// Ensures the array can hold at least `needed` elements
+    fn reserve(&mut self, needed: i64) {
+        if needed > self.capacity {
+            self.resize(needed);
+        }
+    }
+
     /// Resizes the array to new capacity
     fn resize(&mut self, new_capacity: i64) {
         if new_capacity <= self.capacity {
@@ -94,19 +101,26 @@ impl<T> DynamicArray<T> {
 // C-compatible interface functions
 // These will be called from generated LLVM code
 
-/// Creates a new dynamic array
-fn array_new() -> i64 {
-    let arr = Box::new(DynamicArray::<i64>::new());
+/// Creates a new dynamic array with room for `capacity` elements
+fn array_new(capacity: i64) -> i64 {
+    let mut arr = Box::new(DynamicArray::<i64>::new());
+    if capacity > 0 {
+        arr.reserve(capacity);
+    }
     Box::into_raw(arr) as i64
 }
 
-/// Pushes a value to a dynamic array
-fn array_push(arr_ptr: i64, value: i64) {
+/// Pushes a value to a dynamic array.
+///
+/// Returns the array pointer to keep using; growth may reallocate the backing
+/// buffer, so callers must store the result back into their variable.
+fn array_push(arr_ptr: i64, value: i64) -> i64 {
     if arr_ptr == 0 {
-        return;
+        return arr_ptr;
     }
     let arr = unsafe { &mut *(arr_ptr as *mut DynamicArray<i64>) };
     arr.push(value);
+    arr_ptr
 }
 
 /// Gets the length of a dynamic array

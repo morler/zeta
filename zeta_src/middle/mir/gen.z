@@ -159,11 +159,18 @@ impl MirGen {
                     // Push initial elements if any
                     for elem in elements {
                         let elem_id = self.lower_expr(elem);
+                        // array_push returns the (possibly relocated) data
+                        // pointer; keep it so later accesses use the live block.
+                        let pushed_id = self.next_id();
                         self.stmts.push(MirStmt::Call {
                             func: "array_push".to_string(),
                             args: vec![arr_id, elem_id],
-                            dest: self.next_id(), // push returns void, ignore dest
+                            dest: pushed_id,
                             type_args: vec![],
+                        });
+                        self.stmts.push(MirStmt::Assign {
+                            lhs: arr_id,
+                            rhs: pushed_id,
                         });
                     }
                 } else {

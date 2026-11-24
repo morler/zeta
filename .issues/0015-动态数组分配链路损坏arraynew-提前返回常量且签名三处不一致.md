@@ -1,16 +1,19 @@
 ---
 id: 15
 title: 动态数组分配链路损坏：array_new 提前返回常量且签名三处不一致
-status: open
+status: closed
 priority: high
 labels:
     - bug
     - security
 relations:
+    depends-on:
+        - 17
     related-to:
         - 9
 created: "2026-11-24"
 updated: "2026-11-24"
+closed: "2026-11-24"
 ---
 
 ## 证据
@@ -117,3 +120,57 @@ module.add_function("array_push",
 ## 相关
 
 - #9 修复了 `array_push` 的栈数组分支，但未触及分配链路本身
+
+## 修复结论（2026-11-24）
+
+实际根因比 issue 中列的更宽一层，四件事一起改才跑通。
+
+### 实际根因
+
+1. **`array_new` 返回魔数**：`return 0x0BADF00D;` 让所有动态数组指向同一伪造地址。
+2. **LLVM 声明与调用不一致**：codegen 声明 `i64 @array_new(i64, i64)`，而 MIR 只传 1 个参数。
+   codegen 的 `get_or_declare_function` 按实参个数找不到匹配声明，于是新建了
+   `@array_new.10` 这个未定义符号；JIT 跳进去直接崩溃（已用 `./zetac /tmp/dyn1.z`
+   复现 SIGSEGV）。这才是"动态数组完全不可用"的即时原因。
+3. **`array_push` 返回类型三处不一致**：Rust 实现返回 `()`、第一处声明返回 `i64`、
+   第二处声明返回 `void`，而 MIR 按有返回值调用。
+4. **容量为 0 时永远无法 push**：`[dynamic]T{}` 分配容量 0，`array_push` 只报错不扩容，
+   于是最基础的"空数组 + push"（仓库里 `tests/array-parsing/*.z` 的主流写法）必然失败。
+
+### 落地的修改
+
+- `src/runtime/array.rs`
+  - 删除 `return 0x0BADF00D;` 与 `#[allow(unreachable_code)]`，清理 3 处 `[ARRAY_NEW]` 调试输出。
+  - `array_new` 加溢出检查（`checked_mul` / `checked_add`），失败返回 0。
+  - 新增 `block_layout` + `grow_array`：用 `realloc` 扩容，成功返回新的数据指针。
+  - `array_push` 改为 `-> i64`，按 `new = old * 1.5 + 1` 几何扩容并返回新数据指针；
+    扩容失败/栈数组/头损坏一律返回原指针且不写入。
+  - `array_set` 删除重复的入参检查与日志块；栈数组分支拒绝负索引。
+  - 新增 5 个单元测试：生命周期、分配地址互异、越界拒绝、几何扩容后旧数据完整、free(NULL)。
+- `src/backend/codegen/codegen.rs`
+  - `array_new` 声明改为 1 参，与运行时一致（修复 `@array_new.10` 幽灵符号）。
+  - 删除第二组重复的 `array_push` / `array_len` / `array_get` 声明及错误行号注释。
+- `src/middle/mir/gen.rs`
+  - 动态数组字面量的 `array_push` 结果写回数组槽位（扩容可能搬移内存块）。
+  - 方法调用形式 `arr.push(x)` 改为返回 `i64` 并写回接收者变量，不再当成 void。
+- `src/middle/resolver/resolver.rs`：`array_push` 内建签名改为返回 `i64`。
+- 自举侧同步：`zeta_src/runtime/array.z`（`array_new(capacity)`、`reserve`、`array_push -> i64`）、
+  `zeta_src/backend/codegen/codegen.z`、`zeta_src/middle/mir/gen.z`。
+- 新增 `tests/array-parsing/dynamic_array_runtime.rs`（已在 `Cargo.toml` 注册），
+  4 个用例走完整 parse → MIR → LLVM → JIT 管线，CI 的 `cargo test` 会实际执行。
+
+### 验证
+
+| 检查 | 结果 |
+|---|---|
+| `cargo test`（LLVM 21.1.8） | 32 个目标全部 ok，0 failed |
+| `cargo test --lib` | 121 passed |
+| 自举 `zeta_src/*.z` 全部经 `zetac` 编译 | 0 失败 |
+| `tests/array-parsing/*.z` 数组用例 | push/len/access/complete/set/ops/basic 结果全部符合注释预期 |
+
+### 遗留（不在本 issue 范围）
+
+- `test_array_index_while.z` 仍返回 0，但根因是 while 条件中调用带返回值函数会读未初始化槽位，
+  已单独立项 **#16**；该用例在本 issue 修复前是直接段错误，现在至少不会崩。
+- `qlty check` 仍报 49 条既有问题（39 条在 `zetas/capybara/vsr_cluster_test.py`），
+  本次改动涉及的文件零新增问题。

@@ -10,7 +10,7 @@
 //! array_new returns pointer to data (after header), not to header.
 #![allow(unsafe_code)]
 
-use std::alloc::{Layout, alloc, dealloc};
+use std::alloc::{Layout, alloc, dealloc, realloc};
 use std::ptr;
 
 /// ArrayHeader structure for bulletproof memory system
@@ -40,6 +40,56 @@ unsafe fn get_data(header: *mut ArrayHeader) -> *mut i64 {
     unsafe { (header as *mut u8).add(ARRAY_HEADER_SIZE) as *mut i64 }
 }
 
+/// Byte layout of an array block holding `capacity` elements.
+fn block_layout(capacity: usize) -> Option<Layout> {
+    let data_size = capacity.checked_mul(std::mem::size_of::<i64>())?;
+    let total_size = ARRAY_HEADER_SIZE.checked_add(data_size)?;
+    let align = std::cmp::max(
+        std::mem::align_of::<ArrayHeader>(),
+        std::mem::align_of::<i64>(),
+    );
+    Layout::from_size_align(total_size, align).ok()
+}
+
+/// Grow an array so it can hold `new_capacity` elements.
+///
+/// Header and data share one block, and `array_new` hands the caller a pointer
+/// *into* that block (the data pointer). `realloc` may move the block, so this
+/// returns the new data pointer; `array_push` passes it back to the language-side
+/// variable, keeping exactly one authoritative pointer.
+///
+/// Returns `None` when the allocation cannot be satisfied, leaving the array
+/// untouched.
+unsafe fn grow_array(header: *mut ArrayHeader, new_capacity: usize) -> Option<*mut i64> {
+    if header.is_null() {
+        return None;
+    }
+
+    let old_capacity = unsafe { (*header).capacity };
+    if new_capacity <= old_capacity {
+        return Some(unsafe { get_data(header) });
+    }
+
+    let old_layout = block_layout(old_capacity)?;
+    let new_layout = block_layout(new_capacity)?;
+
+    let new_block = unsafe { realloc(header as *mut u8, old_layout, new_layout.size()) };
+    if new_block.is_null() {
+        return None;
+    }
+
+    let new_header = new_block as *mut ArrayHeader;
+    unsafe {
+        (*new_header).capacity = new_capacity;
+        let data_ptr = get_data(new_header);
+        // Sanitize the freshly added tail so callers never observe stale bytes.
+        let old_end = (data_ptr as *mut u8).add(old_capacity * std::mem::size_of::<i64>());
+        let added = (new_capacity - old_capacity) * std::mem::size_of::<i64>();
+        ptr::write_bytes(old_end, UNINITIALIZED_PATTERN, added);
+        Some(data_ptr)
+    }
+}
+
 /// Check if header is valid
 unsafe fn check_header(header: *const ArrayHeader) -> bool {
     if header.is_null() {
@@ -62,21 +112,20 @@ unsafe fn check_canary(header: *const ArrayHeader) -> bool {
 /// Create a new array with given capacity
 ///
 /// # Safety
-/// Returns a pointer to data (after ArrayHeader), not to header
-#[allow(unreachable_code)]
+/// Returns a pointer to data (after ArrayHeader), not to header.
+/// Returns 0 when the allocation cannot be satisfied.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn array_new(capacity: usize) -> i64 {
-    // Just return a constant, no function calls
-    return 0x0BADF00D;
-
     // Calculate total size: header + data
     let elem_size = std::mem::size_of::<i64>();
-    let data_size = capacity * elem_size;
-    let total_size = ARRAY_HEADER_SIZE + data_size;
-    println!(
-        "[ARRAY_NEW] elem_size = {}, data_size = {}, total_size = {}",
-        elem_size, data_size, total_size
-    );
+    let data_size = match capacity.checked_mul(elem_size) {
+        Some(size) => size,
+        None => return 0,
+    };
+    let total_size = match ARRAY_HEADER_SIZE.checked_add(data_size) {
+        Some(size) => size,
+        None => return 0,
+    };
 
     // Allocate single contiguous block for header + data
     let align = std::cmp::max(
@@ -85,7 +134,7 @@ pub unsafe extern "C" fn array_new(capacity: usize) -> i64 {
     );
     let layout = match Layout::from_size_align(total_size, align) {
         Ok(layout) => layout,
-        Err(e) => {
+        Err(_) => {
             return 0;
         }
     };
@@ -106,10 +155,6 @@ pub unsafe extern "C" fn array_new(capacity: usize) -> i64 {
 
     // Get data pointer (after header)
     let data_ptr = unsafe { get_data(header_ptr) };
-    println!(
-        "[ARRAY_NEW] header_ptr = {:?}, data_ptr = {:?}",
-        header_ptr, data_ptr
-    );
 
     // Initialize data with sanitization pattern (0xCD for uninitialized)
     unsafe {
@@ -117,7 +162,6 @@ pub unsafe extern "C" fn array_new(capacity: usize) -> i64 {
     }
 
     // Return data pointer (not header pointer)
-
     data_ptr as i64
 }
 
@@ -237,17 +281,6 @@ pub unsafe extern "C" fn array_get(ptr: i64, index: i64) -> i64 {
 /// ptr must be a valid data pointer returned by array_new, index must be < length
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn array_set(ptr: i64, index: i64, value: i64) {
-    println!(
-        "[ARRAY_SET] Called with ptr = {}, index = {}, value = {}",
-        ptr, index, value
-    );
-    if ptr == 0 {
-        return;
-    }
-    println!(
-        "[ARRAY_SET] Called with ptr = {}, index = {}, value = {}",
-        ptr, index, value
-    );
     if ptr == 0 {
         return;
     }
@@ -300,13 +333,16 @@ pub unsafe extern "C" fn array_set(ptr: i64, index: i64, value: i64) {
             *data_ptr.offset(index as isize) = value;
         }
     } else {
-        // This is a stack array (no header)
-        // Just write the value directly
-        // WARNING: No bounds checking for stack arrays!
-        println!(
-            "[ARRAY_SET] Stack array write at index {}: {}",
-            index, value
-        );
+        // Stack array (no header): the caller supplies the element address
+        // directly. A negative index would address memory before the array, so
+        // refuse it instead of writing outside the buffer.
+        if index < 0 {
+            println!(
+                "[ARRAY_SET] ERROR: negative index {} for stack array",
+                index
+            );
+            return;
+        }
         unsafe {
             *data_ptr.offset(index as isize) = value;
         }
@@ -316,62 +352,73 @@ pub unsafe extern "C" fn array_set(ptr: i64, index: i64, value: i64) {
 /// Push element to array
 ///
 /// # Safety
-/// ptr must be a valid data pointer returned by array_new
+/// ptr must be a valid data pointer returned by array_new (or by this function).
+///
+/// Returns the data pointer to keep using. The array grows geometrically and
+/// growth may relocate the block, so the caller must store the return value back
+/// into the variable it took the pointer from. Returns the incoming pointer
+/// unchanged when the push was refused (null array, corrupted header, stack
+/// array, or allocation failure).
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn array_push(ptr: i64, value: i64) {
+pub unsafe extern "C" fn array_push(ptr: i64, value: i64) -> i64 {
     if ptr == 0 {
-        return;
+        return ptr;
     }
 
-    let data_ptr = ptr as *mut i64;
+    let mut data_ptr = ptr as *mut i64;
     let header = unsafe { get_header(data_ptr) };
 
-    // Check header integrity
-    if unsafe { check_header(header) } {
-        // This is a heap array with a valid header
-
-        // Check canary for overflow detection
-        if !unsafe { check_canary(header) } {
-            // Canary corrupted - buffer overflow detected
-            println!(
-                "[ARRAY_PUSH] Expected canary: 0x{:X}, Found: 0x{:X}",
-                CANARY_VALUE,
-                unsafe { (*header).canary }
-            );
-            return;
-        }
-
-        let len = unsafe { (*header).len };
-        let capacity = unsafe { (*header).capacity };
-
-        if len >= capacity {
-            // Array is full
-            println!(
-                "[ARRAY_PUSH] ERROR: Array capacity exceeded! Length={}, Capacity={}",
-                len, capacity
-            );
-            return;
-        }
-
-        // Add element
-        unsafe {
-            *data_ptr.add(len) = value;
-            (*header).len = len + 1;
-        }
-    } else {
-        // This is a stack array (no header).
-        //
+    if !unsafe { check_header(header) } {
         // A stack array carries no length/capacity metadata, so `array_push`
-        // cannot know where the next free slot is. Guessing (previously:
-        // always writing to index 0) silently corrupted data, so refuse the
-        // operation and report it instead of writing to the wrong slot.
+        // cannot know where the next free slot is. Guessing (previously: always
+        // writing to index 0) silently corrupted data, so refuse the operation
+        // and report it instead of writing to the wrong slot.
         //
         // Stack arrays must be initialized with `stack_array_set(ptr, index,
         // value)`, which does take an explicit index.
         println!(
             "[ARRAY_PUSH] ERROR: cannot push to a stack array (no length metadata); use stack_array_set with an explicit index"
         );
+        return ptr;
     }
+
+    if !unsafe { check_canary(header) } {
+        // Canary corrupted - buffer overflow detected
+        println!(
+            "[ARRAY_PUSH] Expected canary: 0x{:X}, Found: 0x{:X}",
+            CANARY_VALUE,
+            unsafe { (*header).canary }
+        );
+        return ptr;
+    }
+
+    let len = unsafe { (*header).len };
+    let capacity = unsafe { (*header).capacity };
+
+    if len >= capacity {
+        // Grow geometrically: new = old * 1.5 + 1 (see
+        // docs/04_ADVANCED_FEATURES_TUTORIAL.md). Growth may move the block.
+        let new_capacity = capacity + capacity / 2 + 1;
+        match unsafe { grow_array(header, new_capacity) } {
+            Some(new_data) => data_ptr = new_data,
+            None => {
+                println!(
+                    "[ARRAY_PUSH] ERROR: failed to grow array beyond capacity {}",
+                    capacity
+                );
+                return ptr;
+            }
+        }
+    }
+
+    let header = unsafe { get_header(data_ptr) };
+    let len = unsafe { (*header).len };
+    unsafe {
+        *data_ptr.add(len) = value;
+        (*header).len = len + 1;
+    }
+
+    data_ptr as i64
 }
 
 /// Set array length
@@ -452,4 +499,90 @@ pub unsafe extern "C" fn stack_array_get(ptr: i64, index: i64) -> i64 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn stack_array_set(ptr: i64, index: i64, value: i64) {
     unsafe { array_set(ptr, index, value) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Full lifecycle: allocate -> push -> get/set -> len -> free.
+    #[test]
+    fn dynamic_array_lifecycle() {
+        unsafe {
+            let ptr = array_new(2);
+            assert_ne!(ptr, 0, "array_new must return a usable pointer");
+            assert_eq!(array_len(ptr), 0, "new array starts empty");
+
+            let ptr = array_push(ptr, 7);
+            let ptr = array_push(ptr, 9);
+            assert_eq!(array_len(ptr), 2);
+            assert_eq!(array_get(ptr, 0), 7);
+            assert_eq!(array_get(ptr, 1), 9);
+
+            array_set(ptr, 1, 42);
+            assert_eq!(array_get(ptr, 1), 42);
+            assert_eq!(array_len(ptr), 2, "array_set must not change len");
+
+            array_free(ptr);
+        }
+    }
+
+    /// `array_new` never hands back a shared placeholder address.
+    #[test]
+    fn array_new_returns_distinct_pointers() {
+        unsafe {
+            let first = array_new(4);
+            let second = array_new(4);
+            assert_ne!(first, 0x0BADF00D);
+            assert_ne!(first, second, "each allocation must be distinct");
+            assert_eq!(array_len(first), 0);
+            assert_eq!(array_len(second), 0);
+            array_free(first);
+            array_free(second);
+        }
+    }
+
+    /// Out-of-bounds and negative indices are rejected instead of written.
+    #[test]
+    fn array_set_rejects_out_of_bounds_index() {
+        unsafe {
+            let ptr = array_new(4);
+            let ptr = array_push(ptr, 1);
+
+            array_set(ptr, 5, 99);
+            array_set(ptr, -1, 99);
+
+            assert_eq!(array_len(ptr), 1);
+            assert_eq!(array_get(ptr, 0), 1);
+            array_free(ptr);
+        }
+    }
+
+    /// Pushing past the initial capacity grows the array instead of failing,
+    /// and data written before the growth stays readable afterwards.
+    #[test]
+    fn array_push_grows_geometrically() {
+        unsafe {
+            let mut ptr = array_new(1);
+            let initial_capacity = (*get_header(ptr as *mut i64)).capacity;
+            let total = initial_capacity + 20;
+
+            for value in 0..total {
+                ptr = array_push(ptr, value as i64);
+                assert_ne!(ptr, 0, "a growing push must keep returning a live pointer");
+            }
+
+            assert_eq!(array_len(ptr), total as i64);
+            for value in 0..total {
+                assert_eq!(array_get(ptr, value as i64), value as i64);
+            }
+            array_free(ptr);
+        }
+    }
+
+    /// Freeing a null pointer is a no-op rather than an invalid dealloc.
+    #[test]
+    fn array_free_accepts_null() {
+        unsafe { array_free(0) };
+    }
 }
