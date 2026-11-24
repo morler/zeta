@@ -50,22 +50,16 @@ pub fn Solana_Transaction_new(
         instructions.len()
     );
 
-    // TODO: Implement actual transaction creation
-    // This would use solana_sdk::transaction::Transaction
-
-    // Placeholder implementation
-    let mut data = Vec::new();
-
-    // Add recent blockhash (simplified)
-    data.extend_from_slice(recent_blockhash.as_bytes());
-
-    // Add instruction count
-    data.push(instructions.len() as u8);
-
-    // Add signer count
-    data.push(signers.len() as u8);
-
-    Ok(SolanaTransaction::new(data, vec![], network))
+    // TODO: Implement actual transaction creation with solana_sdk::transaction::Transaction.
+    //
+    // The previous placeholder built a bespoke layout (raw blockhash string +
+    // two length bytes) that is not the Solana wire format, so the resulting
+    // transaction could never be submitted. Report the gap rather than hand
+    // back something unusable.
+    let _ = (instructions, signers, recent_blockhash, network);
+    Err(BlockchainError::not_implemented(
+        "Solana transaction construction is not implemented; no transaction was created",
+    ))
 }
 
 /// Sign Solana transaction
@@ -88,21 +82,15 @@ pub fn Solana_Transaction_sign(
         )));
     }
 
-    // TODO: Implement actual Ed25519 signing
-    // This would use ed25519_dalek::SigningKey
-
-    log::warn!("Solana transaction signing not fully implemented - placeholder");
-
-    // Create placeholder signature
-    use sha2::{Digest, Sha256};
-    let mut hasher = Sha256::new();
-    hasher.update(&tx.data);
-    hasher.update(private_key);
-    let signature = hasher.finalize().to_vec();
-
-    tx.signatures.push(signature);
-
-    Ok(())
+    // TODO: Implement actual Ed25519 signing with ed25519_dalek::SigningKey.
+    //
+    // The previous placeholder pushed a SHA-256(private_key) value into
+    // `tx.signatures` and returned Ok(()), which produces a "signed"
+    // transaction that no chain would ever accept. Report the gap instead of
+    // producing unusable signatures.
+    Err(BlockchainError::not_implemented(
+        "Solana transaction signing is not implemented (Ed25519); no signature was produced",
+    ))
 }
 
 /// Verify Solana transaction signature
@@ -135,10 +123,14 @@ pub fn Solana_Transaction_verify(
         )));
     }
 
-    // TODO: Implement actual Ed25519 verification
-
-    log::warn!("Solana transaction verification not fully implemented - placeholder");
-    Ok(true)
+    // TODO: Implement actual Ed25519 verification (ed25519_dalek::VerifyingKey).
+    //
+    // Until then this must NOT report success: returning Ok(true) would let any
+    // signature pass verification, so callers would accept forged or corrupted
+    // transactions. Fail closed instead.
+    Err(BlockchainError::not_implemented(
+        "Solana transaction signature verification is not implemented; refusing to report a signature as valid",
+    ))
 }
 
 /// Serialize Solana transaction to bytes
@@ -255,11 +247,15 @@ pub fn Solana_Transaction_size(tx: &SolanaTransaction) -> usize {
 /// * `Ok(u64)` - Transaction fee in lamports
 /// * `Err(SolanaError)` - Failed to calculate fee
 pub fn Solana_Transaction_fee(tx: &SolanaTransaction) -> Result<u64, BlockchainError> {
-    // TODO: Implement actual fee calculation
-    // This would depend on compute units and priority fee
-
-    // Placeholder: 5000 lamports (0.000005 SOL)
-    Ok(5000)
+    // TODO: Implement actual fee calculation (compute units + priority fee).
+    //
+    // Returning a fixed 5000 lamports silently understates real fees on any
+    // transaction with non-trivial compute usage, so callers could underfund
+    // and have it rejected. Report the gap instead of guessing.
+    let _ = tx;
+    Err(BlockchainError::not_implemented(
+        "Solana transaction fee calculation is not implemented; no fee estimate is available",
+    ))
 }
 
 /// Create system transfer instruction

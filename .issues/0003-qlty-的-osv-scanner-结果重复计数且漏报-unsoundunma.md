@@ -1,7 +1,7 @@
 ---
 id: 3
 title: qlty 的 osv-scanner 结果重复计数且漏报 unsound/unmaintained
-status: in-progress
+status: closed
 priority: medium
 labels:
     - bug
@@ -11,6 +11,7 @@ relations:
         - 12
 created: "2026-11-24"
 updated: "2026-11-24"
+closed: "2026-11-24"
 ---
 
 ## 问题
