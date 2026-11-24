@@ -1,12 +1,13 @@
 ---
 id: 13
 title: workflow 中自建 runner 标签被 actionlint 误报为未知标签（15 条）
-status: in-progress
+status: closed
 priority: low
 labels:
     - docs
 created: "2026-11-24"
 updated: "2026-11-24"
+closed: "2026-11-24"
 ---
 
 ## 证据
@@ -85,3 +86,9 @@ self-hosted-runner:
 
 最后一项是关键：确认配置**只**消除了 runner-label，没有削弱 expression 等实质检查
 （#5 的修复正依赖该规则）。
+
+## 关闭说明（2026-11-24）
+
+修复已在提交 `a5d93ea` 落地，本次核对实际文件后同步状态。
+
+新增 `.github/actionlint.yaml` 声明 galaxy / wsl2 / x86-64 自定义标签，保留其他 actionlint 规则的敏锐度，而非降级规则。

@@ -1,7 +1,7 @@
 ---
 id: 12
 title: .qlty 被 .gitignore 忽略，且 .gitignore 已损坏成二进制文件
-status: in-progress
+status: closed
 priority: medium
 labels:
     - bug
@@ -10,6 +10,7 @@ relations:
         - 3
 created: "2026-11-24"
 updated: "2026-11-24"
+closed: "2026-11-24"
 ---
 
 ## 证据
@@ -113,3 +114,9 @@ PERFORMANCE_*.mdz\0e\0t\0a\0/\0\r\n\0\r\n\0\n
 | 规则语义差异 | 仅上述两处，无其他改动 |
 | `qlty check .qlty/ .gitignore` | ✔ No issues |
 | 纳入文件数 | 3 个配置，无缓存/日志 |
+
+## 关闭说明（2026-11-24）
+
+修复已在提交 `520251e` 落地，本次核对实际文件后同步状态。
+
+`.gitignore` 现为正常 ASCII 文本（含 CRLF/LF 混合行尾，但可正常解析，已不是 UTF-16 二进制）；`.qlty/qlty.toml`、`.qlty/.gitignore`、`.qlty/configs/.shellcheckrc` 均已纳入版本控制（`git ls-files .qlty/` 可查）。

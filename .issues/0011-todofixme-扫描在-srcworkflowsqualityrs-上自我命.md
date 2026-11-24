@@ -1,12 +1,13 @@
 ---
 id: 11
 title: TODO/FIXME 扫描在 src/workflows/quality.rs 上自我命中，产生 3 条假问题
-status: in-progress
+status: closed
 priority: low
 labels:
     - bug
 created: "2026-11-24"
 updated: "2026-11-24"
+closed: "2026-11-24"
 ---
 
 ## 证据
@@ -107,3 +108,9 @@ fn contains_marker(haystack: &str, marker: &str) -> bool {
 新增的 2 个单元测试无法在本机运行：测试二进制需 `libLLVM.so.23.1`，本机缺 LLVM 21。
 逻辑本身已用等价脚本逐例验证，但**测试未实际执行**，需在有 LLVM 21 的环境跑
 `cargo test --lib workflows::quality`。
+
+## 关闭说明（2026-11-24）
+
+修复已在提交 `f595a54` 落地，本次核对实际文件后同步状态。
+
+TODO 检查器改为词边界匹配，`mastodon`/`todos` 之类不再误报；自指误报通过在 `.qlty/qlty.toml` 的 exclude_patterns 中排除 `src/workflows/quality.rs` 解决（该文件已验证为第 46 行）。

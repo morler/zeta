@@ -1,12 +1,13 @@
 ---
 id: 10
 title: vsr_cluster_test.py：rid 死代码、裸 except 吞异常、部分安全告警为误报
-status: in-progress
+status: closed
 priority: low
 labels:
     - bug
 created: "2026-11-24"
 updated: "2026-11-24"
+closed: "2026-11-24"
 ---
 
 ## 证据
@@ -125,3 +126,9 @@ except:
 | bandit B404 | 1 | `import subprocess` 本身 |
 | radarlint S1192 | 1 | "  PASS" 字面量重复 3 次，纯风格 |
 | radarlint S5713 | 1 | 与已捕获异常类冗余，低价值 |
+
+## 关闭说明（2026-11-24）
+
+修复已在提交 `fe1bc41` 落地，本次核对实际文件后同步状态。
+
+死代码（`rid = 0`）与两处裸 except / 静默吞异常均已修复；语法与 ruff 检查通过。当前第 329 行的 `except Exception as e` 位于测试循环内，用途是捕获单个用例失败并打印 traceback、继续跑其余用例，不是吞异常，保留属合理。
