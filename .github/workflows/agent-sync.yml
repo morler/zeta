@@ -24,7 +24,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0  # Get all history for merging
           persist-credentials: false
@@ -163,7 +163,7 @@ jobs:
           
       - name: Notify agent on conflict
         if: steps.check-ready.outputs.ready == 'true' && steps.check-ready.outputs.merge_status == 'conflict'
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         env:
           AGENT: ${{ steps.agent-info.outputs.agent }}
           FEATURE_BRANCH: ${{ steps.agent-info.outputs.feature_branch }}
@@ -192,7 +192,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: true  # needed to push the merge

@@ -19,7 +19,7 @@ jobs:
   check:
     runs-on: [self-hosted, galaxy, wsl2, x86-64]
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       with:
         persist-credentials: false
     - name: Check
@@ -33,7 +33,7 @@ jobs:
     runs-on: [self-hosted, galaxy, wsl2, x86-64]
     needs: check
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       with:
         persist-credentials: false
     - name: Test
@@ -45,7 +45,7 @@ jobs:
     runs-on: [self-hosted, galaxy, wsl2, x86-64]
     needs: test
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       with:
         persist-credentials: false
     - name: Build release compiler
@@ -80,7 +80,7 @@ jobs:
     runs-on: [self-hosted, galaxy, wsl2, x86-64]
     needs: test
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       with:
         persist-credentials: false
     - name: Build release

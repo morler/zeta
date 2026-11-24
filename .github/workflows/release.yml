@@ -23,7 +23,7 @@ jobs:
   build-linux:
     runs-on: [self-hosted, galaxy, wsl2, x86-64]
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       with:
         persist-credentials: false
 
@@ -51,10 +51,24 @@ jobs:
         ls -la dist/
 
     - name: Publish release
-      uses: softprops/action-gh-release@v2
-      with:
-        files: |
-          dist/zetac-linux-x86_64
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        INPUT_TAG: ${{ inputs.tag }}
+      run: |
+        # On a tag push use that tag; on manual dispatch prefer inputs.tag,
+        # falling back to the commit SHA so the release name is still unique.
+        TAG="${GITHUB_REF_NAME}"
+        if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+          if [ -n "$INPUT_TAG" ]; then
+            TAG="$INPUT_TAG"
+          else
+            TAG="build-${GITHUB_SHA::12}"
+          fi
+        fi
+
+        echo "Publishing release $TAG"
+        gh release create "$TAG" \
+          --generate-notes \
+          --latest \
+          dist/zetac-linux-x86_64 \
           dist/zetac-linux-x86_64.sha256
-        generate_release_notes: true
-        make_latest: true

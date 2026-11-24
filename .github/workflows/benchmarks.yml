@@ -54,7 +54,7 @@ jobs:
     outputs:
       llvm_prefix: ${{ steps.set-llvm.outputs.llvm_prefix }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       with:
         persist-credentials: false
     - name: Install LLVM 21
@@ -71,12 +71,12 @@ jobs:
         echo "LLVM_SYS_211_PREFIX=/usr/lib/llvm-21" >> $GITHUB_ENV
         echo "llvm_prefix=/usr/lib/llvm-21" >> $GITHUB_OUTPUT
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
+      uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
       with:
         toolchain: nightly
         components: rustfmt, clippy
     - name: Cache cargo
-      uses: actions/cache@v4
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: |
           ~/.cargo/registry
@@ -90,7 +90,7 @@ jobs:
     needs: setup
     if: ${{ github.event_name == 'schedule' || github.event.inputs.benchmark_type == 'all' || github.event.inputs.benchmark_type == 'compiler' }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       with:
         persist-credentials: false
     - name: Setup LLVM
@@ -100,11 +100,11 @@ jobs:
         echo "LLVM_SYS_210_PREFIX=$LLVM_PREFIX" >> $GITHUB_ENV
         echo "LLVM_SYS_211_PREFIX=$LLVM_PREFIX" >> $GITHUB_ENV
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
+      uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
       with:
         toolchain: nightly
     - name: Restore cache
-      uses: actions/cache@v4
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: |
           ~/.cargo/registry
@@ -136,7 +136,7 @@ jobs:
     needs: setup
     if: ${{ github.event_name == 'schedule' || github.event.inputs.benchmark_type == 'all' || github.event.inputs.benchmark_type == 'runtime' }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       with:
         persist-credentials: false
     - name: Setup LLVM
@@ -146,11 +146,11 @@ jobs:
         echo "LLVM_SYS_210_PREFIX=$LLVM_PREFIX" >> $GITHUB_ENV
         echo "LLVM_SYS_211_PREFIX=$LLVM_PREFIX" >> $GITHUB_ENV
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
+      uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
       with:
         toolchain: nightly
     - name: Restore cache
-      uses: actions/cache@v4
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: |
           ~/.cargo/registry
@@ -182,7 +182,7 @@ jobs:
     needs: setup
     if: ${{ github.event_name == 'schedule' || github.event.inputs.benchmark_type == 'all' || github.event.inputs.benchmark_type == 'regression' }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       with:
         persist-credentials: false
     - name: Setup LLVM
@@ -192,11 +192,11 @@ jobs:
         echo "LLVM_SYS_210_PREFIX=$LLVM_PREFIX" >> $GITHUB_ENV
         echo "LLVM_SYS_211_PREFIX=$LLVM_PREFIX" >> $GITHUB_ENV
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
+      uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
       with:
         toolchain: nightly
     - name: Restore cache
-      uses: actions/cache@v4
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: |
           ~/.cargo/registry
@@ -236,7 +236,7 @@ jobs:
     needs: [compiler-benchmarks, runtime-benchmarks, regression-tests]
     if: always()
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       with:
         persist-credentials: false
     - name: Generate benchmark report
