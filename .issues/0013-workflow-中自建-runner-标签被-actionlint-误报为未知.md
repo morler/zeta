@@ -1,7 +1,7 @@
 ---
 id: 13
 title: workflow 中自建 runner 标签被 actionlint 误报为未知标签（15 条）
-status: open
+status: in-progress
 priority: low
 labels:
     - docs
@@ -51,3 +51,37 @@ updated: "2026-11-24"
 ## 说明
 
 此条登记的目的是防止误报长期污染 `qlty check` 输出，导致真问题（如 #5）被淹没。
+
+---
+
+## 修复记录（已完成）
+
+### 改动
+
+采用 issue 中推荐的方案 1（声明自定义标签），而非关闭规则——这样其他 actionlint 检查
+（expression、action 版本、shellcheck）保持敏锐。
+
+新增 `.github/actionlint.yaml`：
+
+```yaml
+self-hosted-runner:
+  labels:
+    - galaxy
+    - wsl2
+    - x86-64
+```
+
+### 验证
+
+用 qlty 内置的 actionlint 1.7.9 直接复现与验证：
+
+| 检查 | 结果 |
+|---|---|
+| 配置前 `actionlint .github/workflows/*.yml` | runner-label 15 条 |
+| 配置后同命令 | **exit 0，0 条** |
+| `qlty check --all --filter actionlint` | **✔ No issues** |
+| 故意插入 `${{ github.event.inputs.nope }}` | 仍报 `property "nope" is not defined ... [expression]` ✅ |
+| 注入测试后还原 | `git diff .github/workflows/` 为空 |
+
+最后一项是关键：确认配置**只**消除了 runner-label，没有削弱 expression 等实质检查
+（#5 的修复正依赖该规则）。

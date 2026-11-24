@@ -1,0 +1,13 @@
+# actionlint configuration for this repository.
+#
+# CI runs on a self-hosted Galaxy runner (see the header comment in
+# .github/workflows/ci.yml), which uses custom labels that actionlint does not
+# know about by default. Declaring them here keeps the genuine actionlint
+# checks (expression validation, action usage, shellcheck) enabled, instead of
+# silencing the whole runner-label rule.
+
+self-hosted-runner:
+  labels:
+    - galaxy
+    - wsl2
+    - x86-64
