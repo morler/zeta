@@ -100,6 +100,19 @@ impl QualityIssue {
     }
 }
 
+/// Whether `marker` occurs in `haystack` as a whole word.
+///
+/// Both arguments are expected to be lowercase. Whole-word matching keeps the
+/// marker check from firing on unrelated identifiers such as `mastodon`.
+fn contains_marker(haystack: &str, marker: &str) -> bool {
+    haystack.match_indices(marker).any(|(idx, _)| {
+        let before = haystack[..idx].chars().next_back();
+        let after = haystack[idx + marker.len()..].chars().next();
+        let is_word = |c: Option<char>| c.is_some_and(|c| c.is_alphanumeric() || c == '_');
+        !is_word(before) && !is_word(after)
+    })
+}
+
 /// Code quality checker
 pub struct CodeQualityChecker {
     /// Enabled checks
@@ -165,7 +178,11 @@ impl CodeQualityChecker {
         // Check for TODO comments
         if *self.enabled_checks.get("todo_comments").unwrap_or(&true) {
             for (line_num, line) in content.lines().enumerate() {
-                if line.to_lowercase().contains("todo") || line.to_lowercase().contains("fixme") {
+                // Match the markers as whole words, case-insensitively. A plain
+                // substring test also matched unrelated words, and lowercasing
+                // twice per line allocated a String each time.
+                let lower = line.to_lowercase();
+                if contains_marker(&lower, "todo") || contains_marker(&lower, "fixme") {
                     let todo_text = line.trim();
                     issues.push(
                         QualityIssue::new(
@@ -403,4 +420,22 @@ pub fn check_code_quality(
     println!("Report saved to reports/ directory.");
 
     Ok(issues)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::contains_marker;
+
+    #[test]
+    fn matches_marker_as_whole_word() {
+        assert!(contains_marker("// todo: fix this", "todo"));
+        assert!(contains_marker("// todo", "todo"));
+    }
+
+    #[test]
+    fn does_not_match_marker_inside_other_words() {
+        assert!(!contains_marker("mastodon", "todo"));
+        assert!(!contains_marker("todos = vec![]", "todo"));
+        assert!(!contains_marker("todos_count", "todo"));
+    }
 }

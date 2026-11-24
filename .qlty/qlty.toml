@@ -40,6 +40,10 @@ exclude_patterns = [
   "**/templates/**",
   "**/testdata/**",
   "**/vendor/**",
+  # The TODO/FIXME checker's own source necessarily contains the marker
+  # strings it searches for, which makes ripgrep report it against itself.
+  # See issue #11.
+  "src/workflows/quality.rs",
 ]
 
 test_patterns = [
