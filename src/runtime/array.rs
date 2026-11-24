@@ -359,15 +359,18 @@ pub unsafe extern "C" fn array_push(ptr: i64, value: i64) {
             (*header).len = len + 1;
         }
     } else {
-        // This is a stack array (no header)
-        // For stack arrays, we need to track position separately
-        // This is a hack - we'll use a static variable to track position
-        // This only works for single-threaded, single-array initialization
-        // HACK: Always write to position 0
-        // This is wrong but works for simple test cases
-        unsafe {
-            *data_ptr = value;
-        }
+        // This is a stack array (no header).
+        //
+        // A stack array carries no length/capacity metadata, so `array_push`
+        // cannot know where the next free slot is. Guessing (previously:
+        // always writing to index 0) silently corrupted data, so refuse the
+        // operation and report it instead of writing to the wrong slot.
+        //
+        // Stack arrays must be initialized with `stack_array_set(ptr, index,
+        // value)`, which does take an explicit index.
+        println!(
+            "[ARRAY_PUSH] ERROR: cannot push to a stack array (no length metadata); use stack_array_set with an explicit index"
+        );
     }
 }
 
