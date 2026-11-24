@@ -20,8 +20,9 @@ jobs:
         
       - name: Extract agent from branch name
         id: extract-agent
+        env:
+          BRANCH_NAME: ${{ github.ref_name }}
         run: |
-          BRANCH_NAME="${{ github.ref_name }}"
           if [[ "$BRANCH_NAME" =~ ^feat/([a-zA-Z]+)- ]]; then
             AGENT="${BASH_REMATCH[1]}"
             echo "agent=${AGENT^^}" >> $GITHUB_OUTPUT
@@ -35,9 +36,8 @@ jobs:
           fi
           
       - name: Setup Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
           components: clippy, rustfmt
           
       - name: Cache dependencies
@@ -51,20 +51,22 @@ jobs:
           
       - name: Check commit tagging
         id: check-tags
+        env:
+          AGENT: ${{ steps.extract-agent.outputs.agent }}
         run: |
-          echo "Checking commit tags for agent: ${{ steps.extract-agent.outputs.agent }}"
+          echo "Checking commit tags for agent: $AGENT"
           
           # Get last commit message
           LAST_COMMIT=$(git log --oneline -1)
           echo "Last commit: $LAST_COMMIT"
           
           # Check if commit is properly tagged
-          if [[ "$LAST_COMMIT" =~ ^\[(${{ steps.extract-agent.outputs.agent }}|MAIN|UNKNOWN)\] ]]; then
+          if [[ "$LAST_COMMIT" =~ ^\[($AGENT|MAIN|UNKNOWN)\] ]]; then
             echo "✅ Commit properly tagged"
             echo "tagged=true" >> $GITHUB_OUTPUT
           else
             echo "❌ Commit missing or incorrect agent tag"
-            echo "Expected: [${{ steps.extract-agent.outputs.agent }}]"
+            echo "Expected: [$AGENT]"
             echo "Got: $LAST_COMMIT"
             echo "tagged=false" >> $GITHUB_OUTPUT
           fi
@@ -90,6 +92,8 @@ jobs:
         
       - name: Generate agent report
         id: report
+        env:
+          REF_NAME: ${{ github.ref_name }}
         run: |
           # Count test files for this agent's feature
           TEST_COUNT=$(find . -name "*.z" -type f | wc -l)
@@ -97,19 +101,19 @@ jobs:
           ZETA_FILES=$(find . -name "*.z" -type f | head -5 | xargs -I {} basename {} | tr '\n' ',' | sed 's/,$//')
           
           # Check for specific feature files
-          if [[ "${{ github.ref_name }}" == *"const"* ]]; then
+          if [[ "$REF_NAME" == *"const"* ]]; then
             FEATURE="const-parsing"
             TEST_FILE="test_const.z"
-          elif [[ "${{ github.ref_name }}" == *"float"* ]]; then
+          elif [[ "$REF_NAME" == *"float"* ]]; then
             FEATURE="float-types"
             TEST_FILE="test_float*.z"
-          elif [[ "${{ github.ref_name }}" == *"match"* ]]; then
+          elif [[ "$REF_NAME" == *"match"* ]]; then
             FEATURE="match-codegen"
             TEST_FILE="test_match*.z"
-          elif [[ "${{ github.ref_name }}" == *"test"* ]]; then
+          elif [[ "$REF_NAME" == *"test"* ]]; then
             FEATURE="test-suite"
             TEST_FILE="test_*.z"
-          elif [[ "${{ github.ref_name }}" == *"verif"* ]]; then
+          elif [[ "$REF_NAME" == *"verif"* ]]; then
             FEATURE="verification"
             TEST_FILE="verification/**/*.md"
           else
@@ -135,26 +139,34 @@ jobs:
           
       - name: Create summary comment
         if: always()
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          AGENT: ${{ steps.extract-agent.outputs.agent }}
+          FEATURE: ${{ steps.report.outputs.feature }}
+          TAGGED: ${{ steps.check-tags.outputs.tagged }}
+          TEST_COUNT: ${{ steps.report.outputs.test_count }}
+          TEST_FILES: ${{ steps.report.outputs.test_files }}
+          JOB_STATUS: ${{ job.status }}
         run: |
           echo "## Agent Branch CI Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Agent:** ${{ steps.extract-agent.outputs.agent }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Feature:** ${{ steps.report.outputs.feature }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** $REF_NAME" >> $GITHUB_STEP_SUMMARY
+          echo "**Agent:** $AGENT" >> $GITHUB_STEP_SUMMARY
+          echo "**Feature:** $FEATURE" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          if [[ "${{ steps.check-tags.outputs.tagged }}" == "true" ]]; then
+          if [[ "$TAGGED" == "true" ]]; then
             echo "✅ **Commit Tagging:** PASS" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ **Commit Tagging:** FAIL" >> $GITHUB_STEP_SUMMARY
           fi
           
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Test Files:** ${{ steps.report.outputs.test_count }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Sample:** ${{ steps.report.outputs.test_files }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Test Files:** $TEST_COUNT" >> $GITHUB_STEP_SUMMARY
+          echo "**Sample:** $TEST_FILES" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          if [[ "${{ job.status }}" == "success" ]]; then
+          if [[ "$JOB_STATUS" == "success" ]]; then
             echo "🎉 **Overall Status:** PASS" >> $GITHUB_STEP_SUMMARY
             echo "All checks passing. Ready for review." >> $GITHUB_STEP_SUMMARY
           else
@@ -171,7 +183,7 @@ jobs:
     
     steps:
       - name: Create PR comment
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
             const { data: pr } = await github.rest.pulls.get({

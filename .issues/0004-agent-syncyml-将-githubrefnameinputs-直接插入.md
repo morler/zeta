@@ -1,7 +1,7 @@
 ---
 id: 4
 title: agent-sync.yml 将 github.ref_name/inputs 直接插入 run 与 github-script，存在命令注入
-status: open
+status: closed
 priority: high
 labels:
     - bug
@@ -12,6 +12,7 @@ relations:
         - 5
 created: "2026-11-24"
 updated: "2026-11-24"
+closed: "2026-11-24"
 ---
 
 ## 证据
@@ -49,3 +50,48 @@ updated: "2026-11-24"
      if [[ "$BRANCH" == *"const"* ]]; then ...
    ```
 2. github-script 改为 `process.env.AGENT` / `process.env.BRANCH`，不使用 `${{ }}` 拼接
+
+---
+
+## 修复记录（已完成）
+
+### 改动
+
+将所有 shell / JS 上下文中的 `${{ }}` 插值改为通过 `env:` 传值，脚本内引用环境变量。
+
+**agent-sync.yml**
+- `Extract agent info`：`BRANCH="${{ github.ref_name }}"` -> `env: BRANCH`
+- `Check if ready for merge`、`Sync with v0.3.9`、`Resolve conflicts`、`Create sync report`：
+  `feature_branch` / `agent` / `merge_status` 全部改由 `env:` 传入
+- `git checkout "$FEATURE_BRANCH"` 等命令增加引号，防止分词
+- `Notify agent on conflict`（github-script）：
+  `const agent = '${{ ... }}'` -> `const agent = process.env.AGENT`
+  （原写法可用分支名里的单引号闭合 JS 字符串）
+- 同时升 `actions/github-script@v6` -> `v7`
+
+**agent-branches.yml**
+- `Extract agent from branch name`：`github.ref_name` 改 `env: BRANCH_NAME`
+- `Check commit tagging`：`steps.extract-agent.outputs.agent` 改 `env: AGENT`，
+  正则中的插值一并替换为 `$AGENT`
+- `Generate agent report`：5 处 `github.ref_name` 改 `env: REF_NAME`
+- `Create summary comment`：`job.status` 及 5 个 step 输出改由 `env:` 传入
+
+**agent-dashboard.yml**
+- `Generate dashboard`：`steps.workflow-status.outputs.branch_status`、
+  `steps.get-branches.outputs.branches`（共 6 处）改由 `env:` 传入
+
+**benchmarks.yml**
+- 3 处 `needs.setup.outputs.llvm_prefix` 改由 `env: LLVM_PREFIX` 传入
+
+### 验证
+
+| 检查 | 结果 |
+|---|---|
+| `qlty check --all` 中 zizmor template-injection | 14 -> **0** ✅ |
+| `qlty check --all` 中 actionlint 非 runner-label 告警 | **0**（原 5 条含 1 条 expression） |
+| 各工作流 `run:` 块 `bash -n` 语法检查 | 26 块，0 错误 |
+| YAML 可被 actionlint 完整解析 | 通过（无解析错误） |
+
+### 说明
+
+`name:` 字段与 `env:` 值中的 `${{ github.ref_name }}` 保持不变，这些不是 shell 求值上下文，无注入风险。

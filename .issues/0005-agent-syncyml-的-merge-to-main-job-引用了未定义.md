@@ -1,7 +1,7 @@
 ---
 id: 5
 title: agent-sync.yml 的 merge-to-main job 引用了未定义的 workflow_dispatch 输入，分支合并流程必然失败
-status: open
+status: closed
 priority: high
 labels:
     - bug
@@ -10,6 +10,7 @@ relations:
         - 4
 created: "2026-11-24"
 updated: "2026-11-24"
+closed: "2026-11-24"
 ---
 
 ## 证据
@@ -61,3 +62,42 @@ on:
          type: string
    ```
 2. 同时按 #4 的方式改为 `env: BRANCH: ${{ inputs.branch }}`，避免注入
+
+---
+
+## 修复记录（已完成）
+
+### 改动
+
+在 `on.workflow_dispatch` 下补充输入定义：
+
+```yaml
+  workflow_dispatch:  # Manual trigger for testing
+    inputs:
+      branch:
+        description: 'Feature branch to merge into v0.3.9'
+        required: true
+        type: string
+```
+
+并将该 job 中的取值改为 `env:` + 环境变量（同时解决注入）：
+
+```yaml
+      - name: Merge feature branch to v0.3.9
+        env:
+          BRANCH: ${{ inputs.branch }}
+        run: |
+          if [ -z "$BRANCH" ]; then ...
+```
+
+`git merge --no-ff "origin/$BRANCH"` 增加引号。
+
+### 验证
+
+- 修改前 `actionlint:expression` 报 `property "branch" is not defined in object type {}`
+- 修改后 **该告警消失**，`qlty check --all --filter actionlint` 只剩 15 条 runner-label 误报（见 #13）
+- `run:` 块 `bash -n` 语法检查通过
+
+### 行为变化
+
+该流程此前必然在 `exit 1` 处失败；现在手动触发时可由用户提供分支名并真正执行合并。

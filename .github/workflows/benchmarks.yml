@@ -87,9 +87,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Setup LLVM
+      env:
+        LLVM_PREFIX: ${{ needs.setup.outputs.llvm_prefix }}
       run: |
-        echo "LLVM_SYS_210_PREFIX=${{ needs.setup.outputs.llvm_prefix }}" >> $GITHUB_ENV
-        echo "LLVM_SYS_211_PREFIX=${{ needs.setup.outputs.llvm_prefix }}" >> $GITHUB_ENV
+        echo "LLVM_SYS_210_PREFIX=$LLVM_PREFIX" >> $GITHUB_ENV
+        echo "LLVM_SYS_211_PREFIX=$LLVM_PREFIX" >> $GITHUB_ENV
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
@@ -129,9 +131,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Setup LLVM
+      env:
+        LLVM_PREFIX: ${{ needs.setup.outputs.llvm_prefix }}
       run: |
-        echo "LLVM_SYS_210_PREFIX=${{ needs.setup.outputs.llvm_prefix }}" >> $GITHUB_ENV
-        echo "LLVM_SYS_211_PREFIX=${{ needs.setup.outputs.llvm_prefix }}" >> $GITHUB_ENV
+        echo "LLVM_SYS_210_PREFIX=$LLVM_PREFIX" >> $GITHUB_ENV
+        echo "LLVM_SYS_211_PREFIX=$LLVM_PREFIX" >> $GITHUB_ENV
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
@@ -171,9 +175,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Setup LLVM
+      env:
+        LLVM_PREFIX: ${{ needs.setup.outputs.llvm_prefix }}
       run: |
-        echo "LLVM_SYS_210_PREFIX=${{ needs.setup.outputs.llvm_prefix }}" >> $GITHUB_ENV
-        echo "LLVM_SYS_211_PREFIX=${{ needs.setup.outputs.llvm_prefix }}" >> $GITHUB_ENV
+        echo "LLVM_SYS_210_PREFIX=$LLVM_PREFIX" >> $GITHUB_ENV
+        echo "LLVM_SYS_211_PREFIX=$LLVM_PREFIX" >> $GITHUB_ENV
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:

@@ -5,6 +5,11 @@ on:
     branches:
       - 'feat/**'  # Agent feature branches
   workflow_dispatch:  # Manual trigger for testing
+    inputs:
+      branch:
+        description: 'Feature branch to merge into v0.3.9'
+        required: true
+        type: string
 
 jobs:
   sync-and-merge:
@@ -24,8 +29,9 @@ jobs:
           
       - name: Extract agent info
         id: agent-info
+        env:
+          BRANCH: ${{ github.ref_name }}
         run: |
-          BRANCH="${{ github.ref_name }}"
           if [[ "$BRANCH" =~ ^feat/([a-zA-Z]+)- ]]; then
             AGENT="${BASH_REMATCH[1]}"
             echo "agent=${AGENT^^}" >> $GITHUB_OUTPUT
@@ -37,9 +43,11 @@ jobs:
           
       - name: Check if ready for merge
         id: check-ready
+        env:
+          FEATURE_BRANCH: ${{ steps.agent-info.outputs.feature_branch }}
         run: |
           # Check if this branch passes all tests
-          echo "Checking if ${{ steps.agent-info.outputs.feature_branch }} is ready for merge..."
+          echo "Checking if $FEATURE_BRANCH is ready for merge..."
           
           # Get last commit message
           LAST_COMMIT=$(git log --oneline -1)
@@ -56,8 +64,10 @@ jobs:
           
       - name: Sync with v0.3.9
         if: steps.check-ready.outputs.ready == 'true'
+        env:
+          FEATURE_BRANCH: ${{ steps.agent-info.outputs.feature_branch }}
         run: |
-          echo "Syncing ${{ steps.agent-info.outputs.feature_branch }} with v0.3.9..."
+          echo "Syncing $FEATURE_BRANCH with v0.3.9..."
           
           # Fetch all branches
           git fetch origin
@@ -67,8 +77,8 @@ jobs:
           git pull origin v0.3.9
           
           # Checkout feature branch
-          git checkout ${{ steps.agent-info.outputs.feature_branch }}
-          git pull origin ${{ steps.agent-info.outputs.feature_branch }}
+          git checkout "$FEATURE_BRANCH"
+          git pull origin "$FEATURE_BRANCH"
           
           # Merge v0.3.9 into feature branch
           echo "Merging v0.3.9 into feature branch..."
@@ -84,9 +94,13 @@ jobs:
           
       - name: Resolve conflicts (if any)
         if: steps.check-ready.outputs.ready == 'true' && steps.check-ready.outputs.merge_status == 'conflict'
+        env:
+          FEATURE_BRANCH: ${{ steps.agent-info.outputs.feature_branch }}
+          AGENT: ${{ steps.agent-info.outputs.agent }}
+          MERGE_STATUS: ${{ steps.check-ready.outputs.merge_status }}
         run: |
-          echo "🚨 Merge conflict detected in ${{ steps.agent-info.outputs.feature_branch }}"
-          echo "Agent ${{ steps.agent-info.outputs.agent }} needs to resolve conflicts manually"
+          echo "🚨 Merge conflict detected in $FEATURE_BRANCH"
+          echo "Agent $AGENT needs to resolve conflicts manually"
           
           # Show conflicting files
           git status --porcelain | grep -E "^AA|^UU|^DD" || true
@@ -109,25 +123,30 @@ jobs:
           
       - name: Create sync report
         if: always()
+        env:
+          AGENT: ${{ steps.agent-info.outputs.agent }}
+          FEATURE_BRANCH: ${{ steps.agent-info.outputs.feature_branch }}
+          READY: ${{ steps.check-ready.outputs.ready }}
+          MERGE_STATUS: ${{ steps.check-ready.outputs.merge_status }}
         run: |
           echo "## Agent Sync Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Agent:** ${{ steps.agent-info.outputs.agent }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Branch:** ${{ steps.agent-info.outputs.feature_branch }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Ready for Merge:** ${{ steps.check-ready.outputs.ready }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Agent:** $AGENT" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** $FEATURE_BRANCH" >> $GITHUB_STEP_SUMMARY
+          echo "**Ready for Merge:** $READY" >> $GITHUB_STEP_SUMMARY
           
-          if [[ "${{ steps.check-ready.outputs.ready }}" == "true" ]]; then
-            echo "**Merge Status:** ${{ steps.check-ready.outputs.merge_status || 'not attempted' }}" >> $GITHUB_STEP_SUMMARY
+          if [[ "$READY" == "true" ]]; then
+            echo "**Merge Status:** ${MERGE_STATUS:-not attempted}" >> $GITHUB_STEP_SUMMARY
             
-            if [[ "${{ steps.check-ready.outputs.merge_status }}" == "success" ]]; then
+            if [[ "$MERGE_STATUS" == "success" ]]; then
               echo "" >> $GITHUB_STEP_SUMMARY
               echo "✅ **Sync Successful**" >> $GITHUB_STEP_SUMMARY
               echo "Feature branch is now synced with v0.3.9 and ready for final merge." >> $GITHUB_STEP_SUMMARY
-            elif [[ "${{ steps.check-ready.outputs.merge_status }}" == "conflict" ]]; then
+            elif [[ "$MERGE_STATUS" == "conflict" ]]; then
               echo "" >> $GITHUB_STEP_SUMMARY
               echo "🚨 **Merge Conflict**" >> $GITHUB_STEP_SUMMARY
-              echo "Agent ${{ steps.agent-info.outputs.agent }} needs to resolve conflicts manually." >> $GITHUB_STEP_SUMMARY
-              echo "Run: \`git checkout ${{ steps.agent-info.outputs.feature_branch }} && git merge v0.3.9\`" >> $GITHUB_STEP_SUMMARY
+              echo "Agent $AGENT needs to resolve conflicts manually." >> $GITHUB_STEP_SUMMARY
+              echo "Run: \`git checkout $FEATURE_BRANCH && git merge v0.3.9\`" >> $GITHUB_STEP_SUMMARY
             fi
           else
             echo "" >> $GITHUB_STEP_SUMMARY
@@ -137,11 +156,14 @@ jobs:
           
       - name: Notify agent on conflict
         if: steps.check-ready.outputs.ready == 'true' && steps.check-ready.outputs.merge_status == 'conflict'
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
+        env:
+          AGENT: ${{ steps.agent-info.outputs.agent }}
+          FEATURE_BRANCH: ${{ steps.agent-info.outputs.feature_branch }}
         with:
           script: |
-            const agent = '${{ steps.agent-info.outputs.agent }}';
-            const branch = '${{ steps.agent-info.outputs.feature_branch }}';
+            const agent = process.env.AGENT;
+            const branch = process.env.FEATURE_BRANCH;
             
             // Create issue or comment
             await github.rest.issues.create({
@@ -166,9 +188,9 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           
       - name: Merge feature branch to v0.3.9
+        env:
+          BRANCH: ${{ inputs.branch }}
         run: |
-          BRANCH="${{ github.event.inputs.branch }}"
-          
           if [ -z "$BRANCH" ]; then
             echo "Error: Branch not specified"
             exit 1
@@ -180,7 +202,7 @@ jobs:
           git pull origin v0.3.9
           
           # Merge with no-fast-forward to preserve history
-          git merge --no-ff origin/$BRANCH -m "Merge $BRANCH into v0.3.9"
+          git merge --no-ff "origin/$BRANCH" -m "Merge $BRANCH into v0.3.9"
           
           # Push to v0.3.9
           git push origin v0.3.9
