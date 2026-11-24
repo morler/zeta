@@ -1,7 +1,7 @@
 ---
 id: 8
 title: '工作流缺少显式 permissions 与 persist-credentials: false'
-status: in-progress
+status: closed
 priority: medium
 labels:
     - security
@@ -10,6 +10,7 @@ relations:
         - 7
 created: "2026-11-24"
 updated: "2026-11-24"
+closed: "2026-11-24"
 ---
 
 ## 证据
@@ -88,3 +89,17 @@ workflow level"），因此改为 job 级，符合最小权限。
 ### 未处理
 
 `unpinned-uses`（31 条）属于 #7，本次未动。
+
+## 关闭说明（2026-11-24）
+
+修复已在提交 `4e82ae9` 落地，本次仅核对后同步状态。
+
+核实方式：
+
+```
+for f in .github/workflows/*.yml; do grep -q '^permissions:' "$f" || echo "MISSING: $f"; done
+# -> 无输出，6 个工作流均声明了显式 permissions
+```
+
+`persist-credentials` 已逐处设置：所有 checkout 默认 `false`，唯一例外是
+`agent-sync.yml:198` 的 `true`，该处需要把合并结果推回分支，且已就地注释说明。

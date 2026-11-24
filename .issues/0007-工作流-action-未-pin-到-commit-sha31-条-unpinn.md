@@ -1,7 +1,7 @@
 ---
 id: 7
 title: 工作流 action 未 pin 到 commit SHA（31 条 unpinned-uses）
-status: in-progress
+status: closed
 priority: medium
 labels:
     - security
@@ -11,6 +11,7 @@ relations:
         - 8
 created: "2026-11-24"
 updated: "2026-11-24"
+closed: "2026-11-24"
 ---
 
 ## 证据
@@ -106,3 +107,16 @@ fi
 
 pin SHA 后不会自动跟随上游安全更新，建议启用 Dependabot 的 `github-actions` 生态，
 让它定期提 PR 升 SHA（可配合 `pinact` 保持 SHA 形式）。
+
+## 关闭说明（2026-11-24）
+
+修复已在提交 `a34a5ae` 落地，本次仅核对后同步状态。
+
+核实方式：
+
+```
+grep -rn 'uses:' .github/workflows/*.yml | grep -vE 'uses: [^@]+@[0-9a-f]{40}'
+# -> 无输出，即没有未 pin 的 action
+grep -rn 'uses:' .github/workflows/*.yml | grep -cE '@[0-9a-f]{40}'
+# -> 30，全部 pin 到 40 位 commit SHA
+```
