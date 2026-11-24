@@ -819,26 +819,41 @@ impl MirGen {
                 });
             }
             AstNode::While { cond, body } => {
-                // Must capture stmts BEFORE lowering the condition,
-                // because lower_expr(cond) can emit SemiringFold side-effects
-                // (e.g. multiplication in `p * p < n`). Those need to be
-                // re-evaluated each iteration, so they must go in the body.
-                let stmts_before_cond = self.stmts.len();
-                let cond_id = self.lower_expr(cond);
+                // Desugar `while C { B }` to:
+                //
+                //     loop { <statements lowering C>; if C { B } else { break } }
+                //
+                // The condition's statements must be lowered *inside the loop*,
+                // before the test: a `MirStmt::While` condition block only
+                // evaluates a single expression, so anything `lower_expr(cond)`
+                // emits (function calls, SemiringFold arithmetic) has to be
+                // placed explicitly. Leaving them outside the loop ran them once
+                // and let the test read a stale value; putting them inside the
+                // `if`'s then-branch ran them only after the test, so the test
+                // read a slot that had never been written
+                // (e.g. `while i < arr.len()` — see issue #16).
+                let stmts_before = self.stmts.len();
 
-                // Generate loop body
+                let cond_id = self.lower_expr(cond);
+                let cond_stmts = self.stmts.split_off(stmts_before);
+
                 for stmt in body {
                     self.lower_ast(stmt);
                 }
+                let body_stmts = self.stmts.split_off(stmts_before);
 
-                // Grab all statements emitted for this while (cond + body)
-                let while_stmts = self.stmts.split_off(stmts_before_cond);
-
-                // Create While statement in MIR — all cond side-effects
-                // are inside the body so they re-execute each iteration
-                self.stmts.push(MirStmt::While {
+                let mut loop_body = cond_stmts;
+                loop_body.push(MirStmt::If {
                     cond: cond_id,
-                    body: while_stmts,
+                    then: body_stmts,
+                    else_: vec![MirStmt::Break],
+                    dest: None,
+                });
+
+                let true_id = self.next_id_with_lit(1);
+                self.stmts.push(MirStmt::While {
+                    cond: true_id,
+                    body: loop_body,
                 });
             }
             AstNode::Unsafe { body } => {

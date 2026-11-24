@@ -122,3 +122,47 @@ fn main() -> i64 {
     );
     assert_eq!(result, 80);
 }
+
+/// A `while` condition that calls a function (here `arr.len()`) must be
+/// re-evaluated every iteration. Regression test for issue #16: the condition's
+/// statements used to be emitted into the loop body, so the condition block read
+/// a temporary that was never written and the loop never ran.
+#[test]
+fn while_condition_calls_function_each_iteration() {
+    let result = run_zeta_main(
+        r#"
+fn main() -> i64 {
+    let arr = [dynamic]i64{0, 1, 2}
+    let mut k: i64 = 0
+    let mut acc: i64 = 0
+    while k < arr.len() {
+        acc += arr[k]
+        k += 1
+    }
+    return acc
+}
+"#,
+    );
+    assert_eq!(result, 3);
+}
+
+/// The condition is re-tested against a value that grows during the loop, which
+/// only works if the call happens once per iteration rather than once up front.
+#[test]
+fn while_condition_sees_values_added_in_body() {
+    let result = run_zeta_main(
+        r#"
+fn main() -> i64 {
+    let arr = [dynamic]i64{}
+    let i: i64 = 0
+    let mut n: i64 = 0
+    while n < 3 {
+        arr.push(n)
+        n += 1
+    }
+    return n + arr.len()
+}
+"#,
+    );
+    assert_eq!(result, 6);
+}
