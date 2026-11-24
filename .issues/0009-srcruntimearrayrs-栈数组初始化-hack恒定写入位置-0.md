@@ -5,6 +5,9 @@ status: closed
 priority: high
 labels:
     - bug
+relations:
+    related-to:
+        - 15
 created: "2026-11-24"
 updated: "2026-11-24"
 closed: "2026-11-24"
