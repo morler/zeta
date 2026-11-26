@@ -1,7 +1,7 @@
 ---
 id: 23
 title: ci.yml 未覆盖 bootstrap 分支，188 个提交从未跑过 CI
-status: open
+status: in-progress
 priority: high
 labels:
     - bug

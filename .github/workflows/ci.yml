@@ -2,9 +2,9 @@
 name: CI
 on:
   push:
-    branches: [ main, dev ]
+    branches: [ main, dev, bootstrap ]
   pull_request:
-    branches: [ main, dev ]
+    branches: [ main, dev, bootstrap ]
 
 permissions:
   contents: read
@@ -54,27 +54,57 @@ jobs:
         echo "zetac built successfully"
     - name: Compile all zeta_src/ files
       run: |
+        # Recurse: the top-level glob only matched 5 of 51 files (issue #23).
+        #
+        # 11 files are known to fail because they still contain Rust source
+        # rather than Zeta (see issues #23 and #26). They are listed in
+        # .github/zeta-src-known-failures.txt so regressions in the other 40 are caught
+        # without turning the build permanently red. Remove entries from that
+        # file as each one is rewritten.
+        KNOWN_FILE=.github/zeta-src-known-failures.txt
         FAILED=0
-        for f in zeta_src/*.z; do
-          if ./target/release/zetac "$f" 2>/dev/null; then
-            echo "  ✅ $f"
+        COUNT=0
+        UNEXPECTED=0
+        while IFS= read -r zfile; do
+          COUNT=$((COUNT + 1))
+          if ./target/release/zetac "$zfile" >/dev/null 2>&1; then
+            if grep -qxF "$zfile" "$KNOWN_FILE" 2>/dev/null; then
+              echo "  FIXED $zfile (remove from $KNOWN_FILE)"
+            else
+              echo "  OK    $zfile"
+            fi
           else
-            echo "  ❌ $f"
-            FAILED=1
+            if grep -qxF "$zfile" "$KNOWN_FILE" 2>/dev/null; then
+              echo "  KNOWN $zfile"
+            else
+              echo "  FAIL  $zfile"
+              UNEXPECTED=$((UNEXPECTED + 1))
+            fi
+            FAILED=$((FAILED + 1))
           fi
-        done
-        exit $FAILED
-    - name: Run known-good tests
+        done < <(find zeta_src -name '*.z' | sort)
+        echo "checked $COUNT file(s): $FAILED failing, $UNEXPECTED unexpected"
+        if [ "$COUNT" -eq 0 ]; then
+          echo "::error::no zeta_src files found"
+          exit 1
+        fi
+        if [ "$UNEXPECTED" -gt 0 ]; then
+          echo "::error::$UNEXPECTED file(s) newly fail to compile; see #23"
+          exit 1
+        fi
+    - name: Run JIT smoke test
       run: |
-        # Run a few simple test programs to verify JIT works
-        for f in tests/test_hello.z tests/test_values.z tests/test_basic.z; do
-          if [ -f "$f" ]; then
-            OUT=$(./target/release/zetac --jit "$f" 2>&1) && \
-              echo "  ✅ $(basename $f): $OUT" || \
-              echo "  ⚠️ $(basename $f): $OUT"
-          fi
-        done
-        echo "Self-host compilation verified: zeta_src/ compiles cleanly"
+        # tests/*.z at the repo root never existed, so the previous step was dead
+        # code (issue #23). Use an inline program instead.
+        cat > /tmp/jit_smoke.z <<'ZETA'
+        fn main() -> i64 {
+            println_i64(42);
+            return 0;
+        }
+        ZETA
+        OUT=$(./target/release/zetac --jit /tmp/jit_smoke.z 2>&1)
+        echo "$OUT"
+        echo "$OUT" | grep -q '42' || { echo "::error::JIT smoke test did not print 42"; exit 1; }
 
   benchmark:
     runs-on: [self-hosted, galaxy, wsl2, x86-64]

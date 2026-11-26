@@ -1,0 +1,15 @@
+# zeta_src files that still contain Rust source instead of Zeta and therefore
+# fail to compile. Listed so CI can recurse over all of zeta_src without
+# failing on problems already tracked in issues #23 and #26.
+# Remove a line once the file is rewritten in Zeta syntax.
+zeta_src/backend/codegen/codegen.z
+zeta_src/backend/codegen/jit.z
+zeta_src/correctness.z
+zeta_src/frontend/parser/unified_parser.z
+zeta_src/main.z
+zeta_src/runtime/array.z
+zeta_src/runtime/host.z
+zeta_src/runtime/xai.z
+zeta_src/tests/parser_generics.z
+zeta_src/tests/parser_impl_blocks.z
+zeta_src/tests/parser_inherent_impl.z
