@@ -1,7 +1,7 @@
 ---
 id: 21
 title: clippy -D warnings 有 13 个 error，CI check job 无法通过
-status: open
+status: in-progress
 priority: high
 labels:
     - bug

@@ -72,7 +72,7 @@ impl IdentityInferenceContext {
             match constraint {
                 IdentityConstraint::Pattern(pattern) => {
                     // Apply pattern constraint to all type variables with known values
-                    for (_, identity_type) in self.type_vars.iter_mut() {
+                    for identity_type in self.type_vars.values_mut() {
                         if let Some(value) = &identity_type.value
                             && !value.contains(pattern)
                         {

@@ -153,15 +153,27 @@ mod tests {
     #[test]
     fn test_any() {
         let features = vec!["xxh64".to_string()];
-        assert!(eval_predicate(r#"any(feature = "xxh64", feature = "xxh3")"#, &features));
-        assert!(!eval_predicate(r#"any(feature = "xxh3", feature = "xxh32")"#, &features));
+        assert!(eval_predicate(
+            r#"any(feature = "xxh64", feature = "xxh3")"#,
+            &features
+        ));
+        assert!(!eval_predicate(
+            r#"any(feature = "xxh3", feature = "xxh32")"#,
+            &features
+        ));
     }
 
     #[test]
     fn test_all() {
         let features = vec!["a".to_string(), "b".to_string()];
-        assert!(eval_predicate(r#"all(feature = "a", feature = "b")"#, &features));
-        assert!(!eval_predicate(r#"all(feature = "a", feature = "c")"#, &features));
+        assert!(eval_predicate(
+            r#"all(feature = "a", feature = "b")"#,
+            &features
+        ));
+        assert!(!eval_predicate(
+            r#"all(feature = "a", feature = "c")"#,
+            &features
+        ));
     }
 
     #[test]

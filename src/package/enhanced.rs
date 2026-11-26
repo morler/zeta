@@ -245,7 +245,7 @@ impl DependencyGraph {
 
     /// Check for vulnerabilities
     pub fn check_vulnerabilities(&mut self, vulnerability_db: &VulnerabilityDatabase) {
-        for (_, node) in self.nodes.iter_mut() {
+        for node in self.nodes.values_mut() {
             node.vulnerabilities = vulnerability_db.check_package(&node.name, &node.version);
         }
     }
@@ -266,7 +266,7 @@ impl DependencyGraph {
 
     /// Check signature status for all packages
     pub fn check_signatures(&mut self, signature_verifier: &SignatureVerifier) {
-        for (_, node) in self.nodes.iter_mut() {
+        for node in self.nodes.values_mut() {
             node.signature_status = signature_verifier.verify_package(&node.name, &node.version);
         }
     }

@@ -521,11 +521,7 @@ impl Resolver {
             AstNode::ArrayLit(elements) => {
                 let mut const_elements = Vec::new();
                 for elem in elements {
-                    if let Some(const_elem) = self.ast_to_const_value(elem) {
-                        const_elements.push(const_elem);
-                    } else {
-                        return None;
-                    }
+                    const_elements.push(self.ast_to_const_value(elem)?);
                 }
                 Some(crate::middle::ctfe::value::ConstValue::Array(
                     const_elements,

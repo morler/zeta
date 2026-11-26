@@ -372,20 +372,14 @@ impl<'ctx> LLVMCodegen<'ctx> {
             Some(Linkage::External),
         );
         let mem_attr = context.create_string_attribute("memory", "unknown");
-        malloc_func.add_attribute(
-            inkwell::attributes::AttributeLoc::Function,
-            mem_attr,
-        );
+        malloc_func.add_attribute(inkwell::attributes::AttributeLoc::Function, mem_attr);
         let free_func = module.add_function(
             "runtime_free",
             void_type.fn_type(&[i64_type.into()], false),
             Some(Linkage::External),
         );
         let mem_attr2 = context.create_string_attribute("memory", "unknown");
-        free_func.add_attribute(
-            inkwell::attributes::AttributeLoc::Function,
-            mem_attr2,
-        );
+        free_func.add_attribute(inkwell::attributes::AttributeLoc::Function, mem_attr2);
         module.add_function(
             "runtime_calloc",
             i64_type.fn_type(&[i64_type.into(), i64_type.into()], false),
@@ -988,7 +982,7 @@ impl<'ctx> LLVMCodegen<'ctx> {
         // Store field name -> index mappings for later use in FieldAccess resolution.
         self.struct_defs.clear();
         for mir in mirs {
-            for (_, expr) in mir.exprs.iter() {
+            for expr in mir.exprs.values() {
                 if let MirExpr::Struct {
                     variant: v,
                     fields: fds,
@@ -1396,7 +1390,10 @@ impl<'ctx> LLVMCodegen<'ctx> {
                     self.collect_ids_from_expr_safe(e, ids, exprs);
                 }
             }
-            MirExpr::ConstEval(_) | MirExpr::StringLit(_) | MirExpr::Lit(_) | MirExpr::Syscall(_, _) => {
+            MirExpr::ConstEval(_)
+            | MirExpr::StringLit(_)
+            | MirExpr::Lit(_)
+            | MirExpr::Syscall(_, _) => {
                 // No IDs to collect
             }
         }
@@ -3206,14 +3203,10 @@ impl<'ctx> LLVMCodegen<'ctx> {
                         while all_args.len() < 7 {
                             all_args.push(self.i64_type.const_zero().into());
                         }
-                        let fn_type = self.i64_type.fn_type(
-                            &[self.i64_type.into(); 7],
-                            false,
-                        );
-                        let callee = self.module.add_function(
-                            "zenith_syscall", fn_type, None,
-                        );
-                        let call = self.builder
+                        let fn_type = self.i64_type.fn_type(&[self.i64_type.into(); 7], false);
+                        let callee = self.module.add_function("zenith_syscall", fn_type, None);
+                        let call = self
+                            .builder
                             .build_call(callee, &all_args, "syscall")
                             .unwrap();
                         let basic_val = Self::call_site_to_basic_value(call)
@@ -3248,7 +3241,10 @@ impl<'ctx> LLVMCodegen<'ctx> {
                             .builder
                             .build_int_to_ptr(addr, self.ptr_type, "load_ptr")
                             .unwrap();
-                        let val = self.builder.build_load(self.i64_type, ptr, "loaded").unwrap();
+                        let val = self
+                            .builder
+                            .build_load(self.i64_type, ptr, "loaded")
+                            .unwrap();
                         let alloca = *self.locals.get(dest).unwrap();
                         self.builder.build_store(alloca, val).unwrap();
                         return;
@@ -3341,12 +3337,12 @@ impl<'ctx> LLVMCodegen<'ctx> {
                     while all_args.len() < 7 {
                         all_args.push(self.i64_type.const_zero().into());
                     }
-                    let fn_type = self.i64_type.fn_type(
-                        &[self.i64_type.into(); 7],
-                        false,
-                    );
+                    let fn_type = self.i64_type.fn_type(&[self.i64_type.into(); 7], false);
                     let callee = self.module.add_function("zenith_syscall", fn_type, None);
-                    let _ = self.builder.build_call(callee, &all_args, "syscall").unwrap();
+                    let _ = self
+                        .builder
+                        .build_call(callee, &all_args, "syscall")
+                        .unwrap();
                     return;
                 }
 
@@ -4151,18 +4147,13 @@ impl<'ctx> LLVMCodegen<'ctx> {
                 dest,
             } => {
                 // Allocate struct on HEAP to prevent dangling pointers
-                let total_bytes = self.i64_type.const_int(
-                    (fields.len() as u64) * 8,
-                    false,
-                );
+                let total_bytes = self.i64_type.const_int((fields.len() as u64) * 8, false);
                 let malloc_fn = self
                     .module
                     .get_function("runtime_malloc")
                     .unwrap_or_else(|| {
-                        let fn_type =
-                            self.i64_type.fn_type(&[self.i64_type.into()], false);
-                        self.module
-                            .add_function("runtime_malloc", fn_type, None)
+                        let fn_type = self.i64_type.fn_type(&[self.i64_type.into()], false);
+                        self.module.add_function("runtime_malloc", fn_type, None)
                     });
                 let heap_ptr = self
                     .builder
@@ -4180,25 +4171,20 @@ impl<'ctx> LLVMCodegen<'ctx> {
                     .unwrap();
                 for (i, (field_name, field_id)) in fields.iter().enumerate() {
                     let field_ptr = unsafe {
-                        self
-                        .builder
-                        .build_gep(
-                            self.i64_type,
-                            struct_base,
-                            &[self.i64_type.const_int(i as u64, false)],
-                            "field_ptr",
-                        )
-                        .unwrap()
+                        self.builder
+                            .build_gep(
+                                self.i64_type,
+                                struct_base,
+                                &[self.i64_type.const_int(i as u64, false)],
+                                "field_ptr",
+                            )
+                            .unwrap()
                     };
-                    let field_val = self
-                        .gen_expr_safe(field_id, exprs)
-                        .into_int_value();
+                    let field_val = self.gen_expr_safe(field_id, exprs).into_int_value();
                     self.builder.build_store(field_ptr, field_val).unwrap();
                 }
                 let dest_alloca = *self.locals.get(dest).unwrap();
-                self.builder
-                    .build_store(dest_alloca, heap_ptr_val)
-                    .unwrap();
+                self.builder.build_store(dest_alloca, heap_ptr_val).unwrap();
             }
             _ => {}
         }
@@ -4224,7 +4210,7 @@ impl<'ctx> LLVMCodegen<'ctx> {
         _exprs: &HashMap<u32, MirExpr>,
     ) -> u32 {
         // Search all known struct definitions for the field name
-        for (_, fields) in self.struct_defs.iter() {
+        for fields in self.struct_defs.values() {
             for (i, name) in fields.iter().enumerate() {
                 if name == field_name {
                     return i as u32;
@@ -4348,25 +4334,29 @@ impl<'ctx> LLVMCodegen<'ctx> {
                 let num_val = self.gen_expr(&exprs[num_id], exprs, None).into_int_value();
                 let mut all_args: Vec<BasicMetadataValueEnum> = vec![num_val.into()];
                 for arg_id in arg_ids {
-                    let val = self.gen_expr(exprs.get(arg_id).unwrap(), exprs, None).into_int_value();
+                    let val = self
+                        .gen_expr(exprs.get(arg_id).unwrap(), exprs, None)
+                        .into_int_value();
                     all_args.push(val.into());
-                    if all_args.len() >= 7 { break; } // 7 = number + 6 args
+                    if all_args.len() >= 7 {
+                        break;
+                    } // 7 = number + 6 args
                 }
                 // Pad to 7 args (number + 6 zero args for unused)
                 while all_args.len() < 7 {
                     all_args.push(self.i64_type.const_zero().into());
                 }
-                
+
                 // Find or declare the C syscall wrapper (use get_function to avoid duplicate .N suffixes)
-                let fn_type = self.i64_type.fn_type(
-                    &[self.i64_type.into(); 7],
-                    false,
-                );
+                let fn_type = self.i64_type.fn_type(&[self.i64_type.into(); 7], false);
                 let callee = match self.module.get_function("zenith_syscall") {
                     Some(f) => f,
                     None => self.module.add_function("zenith_syscall", fn_type, None),
                 };
-                let call = self.builder.build_call(callee, &all_args, "syscall").unwrap();
+                let call = self
+                    .builder
+                    .build_call(callee, &all_args, "syscall")
+                    .unwrap();
                 // CallSiteValue -> BasicValueEnum via try_as_basic_value()
                 match call.try_as_basic_value() {
                     inkwell::values::ValueKind::Basic(val) => val,
@@ -4535,10 +4525,7 @@ impl<'ctx> LLVMCodegen<'ctx> {
                                 "right_bool",
                             )
                             .unwrap();
-                        let bool_or = self
-                            .builder
-                            .build_or(left_bool, right_bool, "or")
-                            .unwrap();
+                        let bool_or = self.builder.build_or(left_bool, right_bool, "or").unwrap();
                         self.builder
                             .build_int_z_extend(bool_or, self.i64_type, "or_ext")
                             .unwrap()
@@ -4551,18 +4538,13 @@ impl<'ctx> LLVMCodegen<'ctx> {
             }
             MirExpr::Struct { variant, fields } => {
                 // Allocate struct on HEAP to prevent dangling pointers
-                let total_bytes = self.i64_type.const_int(
-                    (fields.len() as u64) * 8,
-                    false,
-                );
+                let total_bytes = self.i64_type.const_int((fields.len() as u64) * 8, false);
                 let malloc_fn = self
                     .module
                     .get_function("runtime_malloc")
                     .unwrap_or_else(|| {
-                        let fn_type =
-                            self.i64_type.fn_type(&[self.i64_type.into()], false);
-                        self.module
-                            .add_function("runtime_malloc", fn_type, None)
+                        let fn_type = self.i64_type.fn_type(&[self.i64_type.into()], false);
+                        self.module.add_function("runtime_malloc", fn_type, None)
                     });
                 let heap_ptr = self
                     .builder
@@ -4580,15 +4562,14 @@ impl<'ctx> LLVMCodegen<'ctx> {
                     .unwrap();
                 for (i, (field_name, field_id)) in fields.iter().enumerate() {
                     let field_ptr = unsafe {
-                        self
-                        .builder
-                        .build_gep(
-                            self.i64_type,
-                            struct_base,
-                            &[self.i64_type.const_int(i as u64, false)],
-                            "field_ptr",
-                        )
-                        .unwrap()
+                        self.builder
+                            .build_gep(
+                                self.i64_type,
+                                struct_base,
+                                &[self.i64_type.const_int(i as u64, false)],
+                                "field_ptr",
+                            )
+                            .unwrap()
                     };
                     let field_val = self
                         .gen_expr(&exprs[field_id], exprs, None)

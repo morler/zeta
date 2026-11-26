@@ -161,13 +161,11 @@ impl MirGen {
             },
             // Count params for potential name mangling (used by get_or_declare_function)
             param_indices: match ast {
-                AstNode::FuncDef { params, .. } | AstNode::ExternFunc { params, .. } => {
-                    params
-                        .iter()
-                        .enumerate()
-                        .map(|(i, (n, _))| (n.clone(), i as u32))
-                        .collect()
-                }
+                AstNode::FuncDef { params, .. } | AstNode::ExternFunc { params, .. } => params
+                    .iter()
+                    .enumerate()
+                    .map(|(i, (n, _))| (n.clone(), i as u32))
+                    .collect(),
                 _ => vec![],
             },
             properties: if let AstNode::FuncDef { attrs, .. } = ast {
@@ -1204,8 +1202,7 @@ impl MirGen {
                             return id;
                         }
                         crate::middle::ctfe::value::ConstValue::String(s) => {
-                            self.exprs
-                                .insert(id, MirExpr::StringLit(s.clone()));
+                            self.exprs.insert(id, MirExpr::StringLit(s.clone()));
                             self.type_map.insert(id, Type::Str);
                             return id;
                         }
@@ -1567,7 +1564,7 @@ impl MirGen {
                 }
 
                 // SPECIAL HANDLING: syscall() — emits raw Linux syscall via inline asm
-                if method == "syscall" && receiver.is_none() && args.len() >= 1 {
+                if method == "syscall" && receiver.is_none() && !args.is_empty() {
                     let num_id = self.lower_expr(&args[0]);
                     let mut arg_ids = Vec::new();
                     for i in 1..args.len() {
@@ -1940,7 +1937,7 @@ impl MirGen {
                     // later `arr[i]` / `arr.len()` see the live allocation.
                     let new_ptr = self.next_id();
                     self.stmts.push(MirStmt::Call {
-                        func: func,
+                        func,
                         args: arg_ids,
                         dest: new_ptr,
                         type_args: vec![],

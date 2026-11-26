@@ -29,7 +29,7 @@ pub fn dead_code_elimination(mir: &mut Mir) {
                 // Don't mark rhs yet - we'll handle it in the second pass
                 // after we know which variables are used
             }
-            MirStmt::Call { args, dest: _, .. } => {
+            MirStmt::Call { args, .. } => {
                 for arg in args {
                     mark_expr_used(*arg, &mut used, &mir.exprs);
                 }
@@ -274,7 +274,11 @@ pub fn common_subexpression_elimination(mir: &mut Mir) {
             MirExpr::Deref { addr_id, .. } => format!("Deref({})", addr_id),
             MirExpr::TimingOwned(inner_id) => format!("TimingOwned({})", inner_id),
             MirExpr::Syscall(num_id, arg_ids) => {
-                let args = arg_ids.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(",");
+                let args = arg_ids
+                    .iter()
+                    .map(|a| a.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
                 format!("Syscall({},[{}])", num_id, args)
             }
             MirExpr::StringLit(s) => format!("StringLit({})", s),
@@ -322,7 +326,7 @@ pub fn common_subexpression_elimination(mir: &mut Mir) {
                     MirStmt::Assign { lhs: _, rhs } if *rhs == *id => {
                         *rhs = existing_id;
                     }
-                    MirStmt::Call { args, dest: _, .. } => {
+                    MirStmt::Call { args, .. } => {
                         for arg in args {
                             if *arg == *id {
                                 *arg = existing_id;
@@ -339,9 +343,7 @@ pub fn common_subexpression_elimination(mir: &mut Mir) {
                     MirStmt::Return { val } if *val == *id => {
                         *val = existing_id;
                     }
-                    MirStmt::SemiringFold {
-                        values, result: _, ..
-                    } => {
+                    MirStmt::SemiringFold { values, .. } => {
                         for val in values {
                             if *val == *id {
                                 *val = existing_id;
@@ -351,9 +353,7 @@ pub fn common_subexpression_elimination(mir: &mut Mir) {
                     MirStmt::Consume { id: expr_id } if *expr_id == *id => {
                         *expr_id = existing_id;
                     }
-                    MirStmt::StructNew {
-                        fields, dest: _, ..
-                    } => {
+                    MirStmt::StructNew { fields, .. } => {
                         for (_, expr_id) in fields {
                             if *expr_id == *id {
                                 *expr_id = existing_id;

@@ -1,7 +1,7 @@
 ---
 id: 20
 title: cargo fmt --check 在已提交代码上有 29 处差异，CI check job 必红
-status: open
+status: in-progress
 priority: medium
 labels:
     - bug
