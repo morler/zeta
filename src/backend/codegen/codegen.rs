@@ -2937,8 +2937,9 @@ impl<'ctx> LLVMCodegen<'ctx> {
                             .unwrap();
                         return;
                     }
-                    // Intercept ptr::is_null<T>(ptr: *const T)
-                    if func == "is_null" && args.len() == 1 {
+                    // Intercept ptr::is_null<T>(ptr: *const T). Method calls arrive with a
+                    // uniquifying suffix (e.g. "is_null_1"), so match on the base name.
+                    if base_intrinsic_name(func) == "is_null" && args.len() == 1 {
                         let ptr = self.gen_expr_safe(&args[0], exprs).into_int_value();
                         let is_null = self
                             .builder
@@ -5482,5 +5483,16 @@ impl<'ctx> LLVMCodegen<'ctx> {
         }
 
         mangled
+    }
+}
+
+/// Method calls are lowered with a uniquifying numeric suffix (e.g. "is_null_1")
+/// to keep overloads distinct. Intrinsic interception has to look at the base
+/// name, otherwise the call is emitted as an unresolved external declaration.
+fn base_intrinsic_name(name: &str) -> &str {
+    let trimmed = name.trim_end_matches(|c: char| c.is_ascii_digit());
+    match trimmed.strip_suffix('_') {
+        Some(base) if !base.is_empty() => base,
+        _ => name,
     }
 }

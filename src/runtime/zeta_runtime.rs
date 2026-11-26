@@ -59,6 +59,23 @@ pub unsafe extern "C" fn zeta_println_i64(value: i64) {
     println!("{}", value);
 }
 
+/// Abort with a message pointer produced by `panic(message)` in Zeta source.
+/// The pointer is a NUL-terminated C string.
+///
+/// # Safety
+/// `msg` must be 0 or a valid NUL-terminated string for the lifetime of the call.
+#[allow(unused_variables)]
+pub unsafe extern "C" fn zeta_panic(msg: i64) -> i64 {
+    if msg != 0 {
+        // SAFETY: the contract above requires a valid NUL-terminated string.
+        let text = unsafe { std::ffi::CStr::from_ptr(msg as *const std::ffi::c_char) };
+        eprintln!("panic: {}", text.to_string_lossy());
+    } else {
+        eprintln!("panic");
+    }
+    std::process::abort();
+}
+
 /// Create a new array (sieve-compatible)
 #[allow(unused_variables)]
 pub unsafe extern "C" fn zeta_sieve_new(size: i64) -> i64 {

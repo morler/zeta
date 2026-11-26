@@ -20,7 +20,7 @@ use crate::runtime::host::{
 use crate::runtime::reactor::{waker_create, waker_wake};
 use crate::runtime::std::std_free;
 use crate::runtime::zeta_runtime::{
-    zeta_array_get_bool, zeta_array_get_i64, zeta_array_set_bool, zeta_array_set_i64,
+    zeta_array_get_bool, zeta_array_get_i64, zeta_array_set_bool, zeta_array_set_i64, zeta_panic,
     zeta_print_i64, zeta_println_i64, zeta_sieve_new,
 };
 use inkwell::OptimizationLevel;
@@ -100,35 +100,45 @@ impl<'ctx> crate::backend::codegen::LLVMCodegen<'ctx> {
             .module
             .create_jit_execution_engine(OptimizationLevel::Aggressive)?;
 
+        // Record every symbol bound below so unresolved declarations can be reported
+        // before the first call instead of segfaulting (see #26).
+        let mut bound: std::collections::HashSet<String> = std::collections::HashSet::new();
+        macro_rules! map_fn {
+            ($f:expr, $ptr:expr) => {{
+                bound.insert($f.get_name().to_string_lossy().into_owned());
+                ee.add_global_mapping($f, $ptr);
+            }};
+        }
+
         if let Some(f) = self.module.get_function("free") {
-            ee.add_global_mapping(&f, std_free as *const () as usize);
+            map_fn!(&f, std_free as *const () as usize);
         }
         if let Some(f) = self.module.get_function("host_str_concat") {
-            ee.add_global_mapping(&f, host_str_concat as *const () as usize);
+            map_fn!(&f, host_str_concat as *const () as usize);
         }
         if let Some(f) = self.module.get_function("host_str_to_lowercase") {
-            ee.add_global_mapping(&f, host_str_to_lowercase as *const () as usize);
+            map_fn!(&f, host_str_to_lowercase as *const () as usize);
         }
         if let Some(f) = self.module.get_function("host_str_to_uppercase") {
-            ee.add_global_mapping(&f, host_str_to_uppercase as *const () as usize);
+            map_fn!(&f, host_str_to_uppercase as *const () as usize);
         }
         if let Some(f) = self.module.get_function("host_str_trim") {
-            ee.add_global_mapping(&f, host_str_trim as *const () as usize);
+            map_fn!(&f, host_str_trim as *const () as usize);
         }
         if let Some(f) = self.module.get_function("host_str_len") {
-            ee.add_global_mapping(&f, host_str_len as *const () as usize);
+            map_fn!(&f, host_str_len as *const () as usize);
         }
         if let Some(f) = self.module.get_function("host_str_starts_with") {
-            ee.add_global_mapping(&f, host_str_starts_with as *const () as usize);
+            map_fn!(&f, host_str_starts_with as *const () as usize);
         }
         if let Some(f) = self.module.get_function("host_str_ends_with") {
-            ee.add_global_mapping(&f, host_str_ends_with as *const () as usize);
+            map_fn!(&f, host_str_ends_with as *const () as usize);
         }
         if let Some(f) = self.module.get_function("host_str_contains") {
-            ee.add_global_mapping(&f, host_str_contains as *const () as usize);
+            map_fn!(&f, host_str_contains as *const () as usize);
         }
         if let Some(f) = self.module.get_function("host_str_replace") {
-            ee.add_global_mapping(&f, host_str_replace as *const () as usize);
+            map_fn!(&f, host_str_replace as *const () as usize);
         }
         if let Some(f) = self.module.get_function("host_str_split") {
             ee.add_global_mapping(
@@ -185,52 +195,52 @@ impl<'ctx> crate::backend::codegen::LLVMCodegen<'ctx> {
             );
         }
         if let Some(f) = self.module.get_function("channel_send") {
-            ee.add_global_mapping(&f, host_channel_send as *const () as usize);
+            map_fn!(&f, host_channel_send as *const () as usize);
         }
         if let Some(f) = self.module.get_function("channel_recv") {
-            ee.add_global_mapping(&f, host_channel_recv as *const () as usize);
+            map_fn!(&f, host_channel_recv as *const () as usize);
         }
         if let Some(f) = self.module.get_function("host_mpsc_channel") {
-            ee.add_global_mapping(&f, host_mpsc_channel as *const () as usize);
+            map_fn!(&f, host_mpsc_channel as *const () as usize);
         }
         if let Some(f) = self.module.get_function("host_mpsc_send") {
-            ee.add_global_mapping(&f, host_mpsc_send as *const () as usize);
+            map_fn!(&f, host_mpsc_send as *const () as usize);
         }
         if let Some(f) = self.module.get_function("host_mpsc_recv") {
-            ee.add_global_mapping(&f, host_mpsc_recv as *const () as usize);
+            map_fn!(&f, host_mpsc_recv as *const () as usize);
         }
         if let Some(f) = self.module.get_function("host_mpsc_try_recv") {
-            ee.add_global_mapping(&f, host_mpsc_try_recv as *const () as usize);
+            map_fn!(&f, host_mpsc_try_recv as *const () as usize);
         }
         if let Some(f) = self.module.get_function("create_waker") {
-            ee.add_global_mapping(&f, waker_create as *const () as usize);
+            map_fn!(&f, waker_create as *const () as usize);
         }
         if let Some(f) = self.module.get_function("wake_waker") {
-            ee.add_global_mapping(&f, waker_wake as *const () as usize);
+            map_fn!(&f, waker_wake as *const () as usize);
         }
         if let Some(f) = self.module.get_function("spawn") {
-            ee.add_global_mapping(&f, host_spawn as *const () as usize);
+            map_fn!(&f, host_spawn as *const () as usize);
         }
         if let Some(f) = self.module.get_function("http_get") {
-            ee.add_global_mapping(&f, host_http_get as *const () as usize);
+            map_fn!(&f, host_http_get as *const () as usize);
         }
         if let Some(f) = self.module.get_function("tls_handshake") {
-            ee.add_global_mapping(&f, host_tls_handshake as *const () as usize);
+            map_fn!(&f, host_tls_handshake as *const () as usize);
         }
         if let Some(f) = self.module.get_function("host_result_is_ok") {
-            ee.add_global_mapping(&f, host_result_is_ok as *const () as usize);
+            map_fn!(&f, host_result_is_ok as *const () as usize);
         }
         if let Some(f) = self.module.get_function("host_result_get_data") {
-            ee.add_global_mapping(&f, host_result_get_data as *const () as usize);
+            map_fn!(&f, host_result_get_data as *const () as usize);
         }
         if let Some(f) = self.module.get_function("map_new") {
-            ee.add_global_mapping(&f, host_map_new as *const () as usize);
+            map_fn!(&f, host_map_new as *const () as usize);
         }
         if let Some(f) = self.module.get_function("map_insert") {
-            ee.add_global_mapping(&f, host_map_insert as *const () as usize);
+            map_fn!(&f, host_map_insert as *const () as usize);
         }
         if let Some(f) = self.module.get_function("map_get") {
-            ee.add_global_mapping(&f, host_map_get as *const () as usize);
+            map_fn!(&f, host_map_get as *const () as usize);
         }
         if let Some(f) = self.module.get_function("scheduler::init_runtime") {
             ee.add_global_mapping(
@@ -241,22 +251,22 @@ impl<'ctx> crate::backend::codegen::LLVMCodegen<'ctx> {
 
         // Array runtime functions
         if let Some(f) = self.module.get_function("array_new") {
-            ee.add_global_mapping(&f, array_new as *const () as usize);
+            map_fn!(&f, array_new as *const () as usize);
         }
         if let Some(f) = self.module.get_function("array_push") {
-            ee.add_global_mapping(&f, array_push as *const () as usize);
+            map_fn!(&f, array_push as *const () as usize);
         }
         if let Some(f) = self.module.get_function("array_len") {
-            ee.add_global_mapping(&f, array_len as *const () as usize);
+            map_fn!(&f, array_len as *const () as usize);
         }
         if let Some(f) = self.module.get_function("array_get") {
-            ee.add_global_mapping(&f, array_get as *const () as usize);
+            map_fn!(&f, array_get as *const () as usize);
         }
         if let Some(f) = self.module.get_function("array_set") {
-            ee.add_global_mapping(&f, array_set as *const () as usize);
+            map_fn!(&f, array_set as *const () as usize);
         }
         if let Some(f) = self.module.get_function("array_free") {
-            ee.add_global_mapping(&f, array_free as *const () as usize);
+            map_fn!(&f, array_free as *const () as usize);
         }
 
         // Async/future runtime functions
@@ -285,7 +295,7 @@ impl<'ctx> crate::backend::codegen::LLVMCodegen<'ctx> {
             );
         }
         if let Some(f) = self.module.get_function("future_poll") {
-            ee.add_global_mapping(&f, crate::runtime::host::future_poll as *const () as usize);
+            map_fn!(&f, crate::runtime::host::future_poll as *const () as usize);
         }
         if let Some(f) = self.module.get_function("future_result") {
             ee.add_global_mapping(
@@ -294,33 +304,51 @@ impl<'ctx> crate::backend::codegen::LLVMCodegen<'ctx> {
             );
         }
         if let Some(f) = self.module.get_function("future_ready") {
-            ee.add_global_mapping(&f, crate::runtime::host::future_ready as *const () as usize);
+            map_fn!(&f, crate::runtime::host::future_ready as *const () as usize);
         }
 
         // Zeta runtime mapping
         if let Some(f) = self.module.get_function("zeta_array_get_i64") {
-            ee.add_global_mapping(&f, zeta_array_get_i64 as *const () as usize);
+            map_fn!(&f, zeta_array_get_i64 as *const () as usize);
         }
         if let Some(f) = self.module.get_function("zeta_array_set_i64") {
-            ee.add_global_mapping(&f, zeta_array_set_i64 as *const () as usize);
+            map_fn!(&f, zeta_array_set_i64 as *const () as usize);
         }
         if let Some(f) = self.module.get_function("zeta_array_get_bool") {
-            ee.add_global_mapping(&f, zeta_array_get_bool as *const () as usize);
+            map_fn!(&f, zeta_array_get_bool as *const () as usize);
         }
         if let Some(f) = self.module.get_function("zeta_array_set_bool") {
-            ee.add_global_mapping(&f, zeta_array_set_bool as *const () as usize);
+            map_fn!(&f, zeta_array_set_bool as *const () as usize);
         }
         if let Some(f) = self.module.get_function("zeta_sieve_new") {
-            ee.add_global_mapping(&f, zeta_sieve_new as *const () as usize);
+            map_fn!(&f, zeta_sieve_new as *const () as usize);
         }
         if let Some(f) = self.module.get_function("zeta_print_i64") {
-            ee.add_global_mapping(&f, zeta_print_i64 as *const () as usize);
+            map_fn!(&f, zeta_print_i64 as *const () as usize);
         }
         if let Some(f) = self.module.get_function("zeta_println_i64") {
-            ee.add_global_mapping(&f, zeta_println_i64 as *const () as usize);
+            map_fn!(&f, zeta_println_i64 as *const () as usize);
         }
         if let Some(f) = self.module.get_function("println_i64") {
-            ee.add_global_mapping(&f, zeta_println_i64 as *const () as usize);
+            map_fn!(&f, zeta_println_i64 as *const () as usize);
+        }
+        if let Some(f) = self.module.get_function("panic") {
+            map_fn!(&f, zeta_panic as *const () as usize);
+        }
+        if let Some(f) = self.module.get_function("print_str") {
+            map_fn!(&f, crate::runtime::io::print_str as *const () as usize);
+        }
+        if let Some(f) = self.module.get_function("runtime_malloc") {
+            map_fn!(
+                &f,
+                crate::runtime::host::runtime_malloc as *const () as usize
+            );
+        }
+        if let Some(f) = self.module.get_function("runtime_free") {
+            map_fn!(
+                &f,
+                crate::runtime::memory::runtime_free as *const () as usize
+            );
         }
 
         // Map Vec runtime functions (zeta_vec_* → vec_*)
@@ -364,7 +392,7 @@ impl<'ctx> crate::backend::codegen::LLVMCodegen<'ctx> {
         ];
         for (name, fn_ptr) in &vec_fns {
             if let Some(f) = self.module.get_function(name) {
-                ee.add_global_mapping(&f, *fn_ptr);
+                map_fn!(&f, *fn_ptr);
             }
         }
         // Map monomorphized vec_* functions
@@ -540,7 +568,7 @@ impl<'ctx> crate::backend::codegen::LLVMCodegen<'ctx> {
         ];
         for (name, fn_ptr) in &tier2_fns {
             if let Some(f) = self.module.get_function(name) {
-                ee.add_global_mapping(&f, *fn_ptr);
+                map_fn!(&f, *fn_ptr);
             }
         }
 
@@ -661,8 +689,57 @@ impl<'ctx> crate::backend::codegen::LLVMCodegen<'ctx> {
         ];
         for (name, fn_ptr) in &tier3_fns {
             if let Some(f) = self.module.get_function(name) {
-                ee.add_global_mapping(&f, *fn_ptr);
+                map_fn!(&f, *fn_ptr);
             }
+        }
+
+        // Actor map/result host helpers. zeta_src/runtime/actor/*.z calls these by
+        // their Rust-side names, which the older map_new/map_get aliases above do
+        // not cover (#26).
+        let actor_fns: Vec<(&str, usize)> = vec![
+            ("host_map_new", host_map_new as *const () as usize),
+            ("host_map_insert", host_map_insert as *const () as usize),
+            ("host_map_get", host_map_get as *const () as usize),
+            (
+                "host_map_free",
+                crate::runtime::actor::map::host_map_free as *const () as usize,
+            ),
+            (
+                "host_result_make_ok",
+                crate::runtime::actor::result::host_result_make_ok as *const () as usize,
+            ),
+            (
+                "host_result_make_err",
+                crate::runtime::actor::result::host_result_make_err as *const () as usize,
+            ),
+            (
+                "host_result_free",
+                crate::runtime::actor::result::host_result_free as *const () as usize,
+            ),
+        ];
+        for (name, fn_ptr) in &actor_fns {
+            if let Some(f) = self.module.get_function(name) {
+                map_fn!(&f, *fn_ptr);
+            }
+        }
+
+        // A call to an undeclared function lowers to a bare external declaration.
+        // LLVM resolves those lazily, so the failure would surface as a segfault
+        // during main(); report it as a compile error instead.
+        let unresolved: Vec<String> = self
+            .module
+            .get_functions()
+            .filter(|f| f.count_basic_blocks() == 0)
+            .map(|f| f.get_name().to_string_lossy().into_owned())
+            .filter(|name| !bound.contains(name))
+            .filter(|name| !bound.contains(name.split('.').next().unwrap_or(name)))
+            .collect();
+        if !unresolved.is_empty() {
+            return Err(format!(
+                "cannot execute: unresolved external symbol(s): {}",
+                unresolved.join(", ")
+            )
+            .into());
         }
 
         Ok(ee)
