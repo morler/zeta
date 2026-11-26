@@ -1,7 +1,7 @@
 ---
 id: 23
 title: ci.yml 未覆盖 bootstrap 分支，188 个提交从未跑过 CI
-status: in-progress
+status: closed
 priority: high
 labels:
     - bug
@@ -12,6 +12,7 @@ relations:
         - 24
 created: "2026-11-26"
 updated: "2026-11-26"
+closed: "2026-11-26"
 ---
 
 ## 现象
@@ -59,3 +60,32 @@ on:
   run: |
     find zeta_src -name '*.z' -print0 | xargs -0 -n1 ./target/release/zetac
 ```
+
+## 改动（2026-11-26）
+
+已修改 `.github/workflows/ci.yml`：
+
+1. `push` / `pull_request` 的 `branches` 增加 `bootstrap`。
+2. zeta-selfhost 改为递归遍历：`find zeta_src -name '*.z'`，并输出 `checked N file(s), M failure(s)`。
+   文件数为 0 时报错退出，避免空跑通过。
+3. 删除「Run known-good tests」死代码步骤，替换为内联 JIT 冒烟测试
+   （编译一个打印 42 的程序并断言输出包含 42，失败则退出 1）。
+
+本地实测：递归遍历命中 51 个文件；JIT 冒烟步骤通过。
+
+## 尚未解决
+
+递归遍历后 51 个文件中有 11 个失败，全部源于同一根因：**`zeta_src` 中大量文件写的是 Rust 源码，
+不是 Zeta 语法**（`use std::...`、`impl`、`Box::new`、`String__new`、`llvm.memset` 等）。
+
+典型错误：
+
+```
+zeta_src/backend/codegen/codegen.z  unresolved: push_str, clone, &mut
+zeta_src/runtime/array.z            unresolved: std_malloc, Box__new, Some, ptr__write, ...
+zeta_src/runtime/host.z             unresolved: duration_since, unwrap, instant_now, std_free
+```
+
+因此启用递归门禁后 CI 会变红。这不属于本 issue 的范围，需要在 #26 的框架下逐文件改写为 Zeta 语法。
+在此之前，本改动会让 zeta-selfhost job 持续失败——若要临时保持绿灯，可先保留顶层遍历并单独开一个
+跟踪 issue，但不建议静默放宽门禁。
