@@ -1,7 +1,7 @@
 ---
 id: 24
 title: Benchmarks workflow 每日失败：main 根目录没有 Cargo.toml
-status: open
+status: in-progress
 priority: medium
 labels:
     - bug
