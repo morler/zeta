@@ -1,7 +1,7 @@
 ---
 id: 19
 title: capybara build.sh 在缺失 src/xxh64.z 时静默截断 build.z，产物丢失 12 个模块
-status: in-progress
+status: closed
 priority: high
 labels:
     - bug
@@ -10,6 +10,7 @@ relations:
         - 25
 created: "2026-11-26"
 updated: "2026-11-26"
+closed: "2026-11-26"
 ---
 
 ## 现象

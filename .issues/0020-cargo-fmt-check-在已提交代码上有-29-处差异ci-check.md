@@ -1,7 +1,7 @@
 ---
 id: 20
 title: cargo fmt --check 在已提交代码上有 29 处差异，CI check job 必红
-status: in-progress
+status: closed
 priority: medium
 labels:
     - bug
@@ -10,6 +10,7 @@ relations:
         - 25
 created: "2026-11-26"
 updated: "2026-11-26"
+closed: "2026-11-26"
 ---
 
 ## 现象
